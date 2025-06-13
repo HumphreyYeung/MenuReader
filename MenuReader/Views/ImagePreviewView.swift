@@ -16,7 +16,8 @@ struct ImagePreviewView: View {
     @State private var showProcessingView = false
     @State private var processingProgress: Double = 0.0
     @State private var processingMessage = "正在分析图像..."
-    @State private var showMockResult = false
+    @State private var showResult = false
+    @State private var ocrResult: OCRProcessingResult?
     
     var body: some View {
         GeometryReader { geometry in
@@ -106,50 +107,51 @@ struct ImagePreviewView: View {
             }
         }
         .statusBarHidden(true)
-        .fullScreenCover(isPresented: $showMockResult) {
-            MockResultView(
-                image: image,
-                onDone: {
-                    showMockResult = false
-                    onConfirm()
-                }
-            )
+        .fullScreenCover(isPresented: $showResult) {
+            if let result = ocrResult {
+                SimpleResultView(
+                    image: image,
+                    result: result,
+                    onDone: {
+                        showResult = false
+                        onConfirm()
+                    }
+                )
+            }
         }
     }
     
     // MARK: - Private Methods
     private func startProcessing() {
         showProcessingView = true
-        simulateProcessing()
+        performRealOCR()
     }
     
-    private func simulateProcessing() {
-        // 模拟处理过程
-        let steps = [
-            (0.2, "正在分析图像..."),
-            (0.4, "识别菜单文字..."),
-            (0.6, "提取菜品信息..."),
-            (0.8, "搜索参考图片..."),
-            (1.0, "处理完成！")
-        ]
-        
+    private func performRealOCR() {
         Task { @MainActor in
-            for (_, step) in steps.enumerated() {
-                let (progress, message) = step
+            let processingManager = OCRProcessingManager.shared
+            
+            // 开始处理
+            await processingManager.startOCRProcessing(image: image)
+            
+                         // 监听处理状态
+             var isCompleted = false
+             while !isCompleted {
+                 processingProgress = processingManager.progress
+                 processingMessage = processingManager.currentStatus.displayName
                 
-                withAnimation(.easeInOut(duration: 0.5)) {
-                    processingProgress = progress
-                    processingMessage = message
+                if let result = processingManager.ocrResult {
+                    ocrResult = result
+                    showProcessingView = false
+                    showResult = true
+                    isCompleted = true
+                } else if processingManager.errorMessage != nil {
+                    showProcessingView = false
+                    isCompleted = true
                 }
                 
-                // 等待1秒再进行下一步
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
             }
-            
-            // 延迟一下显示结果
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            showProcessingView = false
-            showMockResult = true
         }
     }
 }
@@ -251,18 +253,11 @@ struct ProcessingView: View {
     }
 }
 
-// MARK: - Mock Result View
-struct MockResultView: View {
+// MARK: - Simple Result View
+struct SimpleResultView: View {
     let image: UIImage
+    let result: OCRProcessingResult
     let onDone: () -> Void
-    
-    // 模拟数据
-    private let mockMenuItems = [
-        MockMenuItem(name: "宫保鸡丁", translation: "Kung Pao Chicken", price: "¥28"),
-        MockMenuItem(name: "麻婆豆腐", translation: "Mapo Tofu", price: "¥18"),
-        MockMenuItem(name: "红烧肉", translation: "Braised Pork", price: "¥35"),
-        MockMenuItem(name: "西湖醋鱼", translation: "West Lake Fish", price: "¥45")
-    ]
     
     var body: some View {
         NavigationView {
@@ -280,32 +275,49 @@ struct MockResultView: View {
                             .cornerRadius(12)
                             .shadow(radius: 5)
                         
-                        // 置信度显示
+                        // 识别结果统计
                         HStack {
-                            Text("识别准确度:")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                            VStack(alignment: .leading) {
+                                Text("识别准确度")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("\(Int(result.confidence * 100))%")
+                                    .font(.headline)
+                                    .foregroundColor(.green)
+                            }
                             
                             Spacer()
                             
-                            Text("95%")
-                                .font(.headline)
-                                .foregroundColor(.green)
+                            VStack(alignment: .trailing) {
+                                Text("菜品数量")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("\(result.menuItems.count)项")
+                                    .font(.headline)
+                                    .foregroundColor(.blue)
+                            }
                         }
                         .padding(.horizontal, 20)
                         
                         // 识别的菜单项
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("识别到的菜品:")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 20)
-                            
-                            LazyVStack(spacing: 8) {
-                                ForEach(mockMenuItems) { item in
-                                    MockMenuItemRow(item: item)
+                        if !result.menuItems.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("识别到的菜品:")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 20)
+                                
+                                LazyVStack(spacing: 8) {
+                                    ForEach(result.menuItems, id: \.originalName) { item in
+                                        SimpleMenuItemRow(item: item)
+                                    }
                                 }
                             }
+                        } else {
+                            Text("未识别到菜品信息")
+                                .font(.headline)
+                                .foregroundColor(.orange)
+                                .padding()
                         }
                         
                         Spacer(minLength: 100)
@@ -313,7 +325,7 @@ struct MockResultView: View {
                     .padding(.top, 20)
                 }
             }
-            .navigationTitle("处理结果")
+            .navigationTitle("识别结果")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -327,34 +339,31 @@ struct MockResultView: View {
     }
 }
 
-// MARK: - Mock Data Models
-struct MockMenuItem: Identifiable {
-    let id = UUID()
-    let name: String
-    let translation: String
-    let price: String
-}
-
-struct MockMenuItemRow: View {
-    let item: MockMenuItem
+// MARK: - Simple Menu Item Row
+struct SimpleMenuItemRow: View {
+    let item: MenuItemAnalysis
     
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.name)
+                Text(item.originalName)
                     .font(.headline)
                     .foregroundColor(.white)
                 
-                Text(item.translation)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
+                if let translatedName = item.translatedName {
+                    Text(translatedName)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
             }
             
             Spacer()
             
-            Text(item.price)
-                .font(.headline)
-                .foregroundColor(.green)
+            if let price = item.price {
+                Text(price)
+                    .font(.headline)
+                    .foregroundColor(.green)
+            }
         }
         .padding()
         .background(Color.gray.opacity(0.2))

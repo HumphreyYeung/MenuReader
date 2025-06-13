@@ -194,7 +194,10 @@ struct CameraView: View {
         .onChange(of: cameraManager.capturedImage) { image in
             if let image = image {
                 selectedImage = image
-                showImagePreview = true
+                // 确保状态同步后再显示预览
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showImagePreview = true
+                }
             }
         }
         .onReceive(orientationNotifier) { _ in
@@ -204,7 +207,10 @@ struct CameraView: View {
             PhotoPickerView(selectedImage: $selectedImage)
                 .onDisappear {
                     if selectedImage != nil {
-                        showImagePreview = true
+                        // 确保从相册选择后状态同步
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            showImagePreview = true
+                        }
                     }
                 }
         }
@@ -228,15 +234,51 @@ struct CameraView: View {
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
                 ImagePreviewView(image: image) {
-                    // 确认处理图像
+                    // 确认处理图像 - 使用真实OCR
                     showImagePreview = false
                     selectedImage = nil
-                    // TODO: 调用图像处理服务
+                    
+                    // 启动真实OCR处理
+                    Task {
+                        let processingManager = OCRProcessingManager.shared
+                        await processingManager.startOCRProcessing(image: image)
+                        
+                        // 处理完成后可以导航到结果页面
+                        if let result = processingManager.ocrResult, result.success {
+                            print("✅ OCR处理成功！识别到 \(result.menuItems.count) 个菜品")
+                            for item in result.menuItems {
+                                print("🍽️ \(item.originalName) -> \(item.translatedName ?? "无翻译")")
+                            }
+                        }
+                    }
                 } onRetake: {
                     // 重新拍照
                     showImagePreview = false
                     selectedImage = nil
                     cameraManager.capturedImage = nil
+                }
+            } else {
+                // 安全检查：如果没有图片，自动关闭预览
+                VStack {
+                    Text("图片加载失败")
+                        .foregroundColor(.white)
+                        .font(.headline)
+                    
+                    Button("关闭") {
+                        showImagePreview = false
+                    }
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+                .onAppear {
+                    // 自动关闭，避免用户困惑
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        showImagePreview = false
+                    }
                 }
             }
         }
@@ -283,6 +325,7 @@ struct CameraView: View {
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
         
+        print("🎬 开始拍照")
         cameraManager.capturePhoto()
     }
     

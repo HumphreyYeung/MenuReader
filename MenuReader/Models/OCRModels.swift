@@ -82,6 +82,15 @@ enum ImageQuality: String, Codable, CaseIterable, Sendable {
         }
     }
     
+    var maxDimension: CGFloat {
+        switch self {
+        case .low: return 800
+        case .medium: return 1200
+        case .high: return 1600
+        case .ultra: return 2400
+        }
+    }
+    
     var displayName: String {
         switch self {
         case .low: return "低质量"

@@ -77,9 +77,16 @@ enum GeminiEndpoint: APIEndpoint {
     }
     
     var headers: [String: String] {
-        return [
+        var headers = [
             "Content-Type": "application/json"
         ]
+        
+        // 添加iOS Bundle ID用于API key验证
+        if let bundleId = Bundle.main.bundleIdentifier {
+            headers["X-Ios-Bundle-Identifier"] = bundleId
+        }
+        
+        return headers
     }
     
     var body: (any Encodable)? {

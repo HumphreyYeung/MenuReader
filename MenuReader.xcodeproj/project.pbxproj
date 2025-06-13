@@ -442,8 +442,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MenuReader/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "MenuReader needs to get access to camera to read the menu";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MenuReader needs to get access to gallery to read menu photo";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "MenuReader需要访问相机来拍摄餐厅菜单照片";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MenuReader需要访问照片库来选择菜单图片";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -480,8 +481,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MenuReader/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "MenuReader needs to get access to camera to read the menu";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MenuReader needs to get access to gallery to read menu photo";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "MenuReader需要访问相机来拍摄餐厅菜单照片";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MenuReader需要访问照片库来选择菜单图片";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

@@ -12,8 +12,8 @@ struct MainTabView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            // Camera Tab - 主要功能
-            CameraView()
+            // Camera Tab - 主要功能（完整OCR流程）
+            CompleteOCRFlowView()
                 .tabItem {
                     Image(systemName: "camera")
                     Text("扫描")
@@ -28,13 +28,21 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
+            // Demo Tab - Task005图片检索演示
+            DishImageDemoView()
+                .tabItem {
+                    Image(systemName: "photo.on.rectangle.angled")
+                    Text("图片检索")
+                }
+                .tag(2)
+            
             // Profile Tab - 用户设置
             ProfileView()
                 .tabItem {
                     Image(systemName: "person.circle")
                     Text("设置")
                 }
-                .tag(2)
+                .tag(3)
         }
         .accentColor(.blue)
     }

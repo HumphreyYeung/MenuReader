@@ -4,12 +4,14 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array/>
+	<key>GEMINI_API_KEY</key>
+	<string>AIzaSyDgbnOFhQ8yF8uwE8NBqstMzFsIt2u1TRE</string>
+	<key>GOOGLE_SEARCH_API_KEY</key>
+	<string>AIzaSyDgbnOFhQ8yF8uwE8NBqstMzFsIt2u1TRE</string>
+	<key>GOOGLE_SEARCH_ENGINE_ID</key>
+	<string>d411db1fbe9ef41d4</string>
 	<key>NSAppTransportSecurity</key>
 	<dict/>
-	<key>NSCameraUsageDescription</key>
-	<string>MenuReader需要访问相机来拍摄餐厅菜单照片</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MenuReader需要访问照片库来选择菜单图片</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
