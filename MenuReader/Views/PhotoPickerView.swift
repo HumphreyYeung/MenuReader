@@ -7,56 +7,71 @@
 
 import SwiftUI
 import PhotosUI
-import UIKit
 
 // MARK: - Photo Picker View
-struct PhotoPickerView: UIViewControllerRepresentable {
+struct PhotoPickerView: View {
     @Binding var selectedImage: UIImage?
     @Environment(\.dismiss) var dismiss
     
-    func makeUIViewController(context: Context) -> PHPickerViewController {
-        var configuration = PHPickerConfiguration(photoLibrary: .shared())
-        configuration.filter = .images
-        configuration.selectionLimit = 1
-        
-        let picker = PHPickerViewController(configuration: configuration)
-        picker.delegate = context.coordinator
-        return picker
-    }
+    @State private var selectedItem: PhotosPickerItem?
     
-    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {
-        // 不需要更新
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, PHPickerViewControllerDelegate {
-        let parent: PhotoPickerView
-        
-        init(_ parent: PhotoPickerView) {
-            self.parent = parent
-        }
-        
-        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            picker.dismiss(animated: true)
-            
-            guard let provider = results.first?.itemProvider else {
-                parent.dismiss()
-                return
+    var body: some View {
+        NavigationView {
+            VStack {
+                PhotosPicker(
+                    selection: $selectedItem,
+                    matching: .images,
+                    photoLibrary: .shared()
+                ) {
+                    VStack(spacing: 20) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 60))
+                            .foregroundColor(.blue)
+                        
+                        Text("选择照片")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                        
+                        Text("从相册中选择一张菜单照片")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .padding()
+                }
+                
+                Spacer()
             }
-            
-            if provider.canLoadObject(ofClass: UIImage.self) {
-                provider.loadObject(ofClass: UIImage.self) { image, _ in
-                    DispatchQueue.main.async {
-                        self.parent.selectedImage = image as? UIImage
-                        self.parent.dismiss()
+            .navigationTitle("选择照片")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("取消") {
+                        dismiss()
                     }
                 }
-            } else {
-                parent.dismiss()
+            }
+        }
+        .onChange(of: selectedItem) { newItem in
+            Task {
+                if let newItem = newItem {
+                    if let data = try? await newItem.loadTransferable(type: Data.self) {
+                        if let image = UIImage(data: data) {
+                            await MainActor.run {
+                                selectedImage = image
+                                dismiss()
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+#Preview {
+    PhotoPickerView(selectedImage: .constant(nil))
 } 

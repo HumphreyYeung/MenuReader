@@ -6,6 +6,91 @@
 //
 
 import Foundation
+import Alamofire
+
+// MARK: - Network Error Types (保留自定义的，因为与Alamofire不冲突)
+enum NetworkError: Error, LocalizedError {
+    case invalidURL
+    case noData
+    case decodingError(Error)
+    case httpError(Int)
+    case networkUnavailable
+    case timeout
+    case unknown(Error)
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "无效的URL地址"
+        case .noData:
+            return "没有接收到数据"
+        case .decodingError(let error):
+            return "数据解析失败: \(error.localizedDescription)"
+        case .httpError(let statusCode):
+            return "HTTP错误: \(statusCode)"
+        case .networkUnavailable:
+            return "网络不可用"
+        case .timeout:
+            return "请求超时"
+        case .unknown(let error):
+            return "未知错误: \(error.localizedDescription)"
+        }
+    }
+}
+
+// MARK: - Request Configuration
+struct RequestConfig {
+    let timeout: TimeInterval = 30.0
+    let retryCount: Int = 3
+    let retryDelay: TimeInterval = 1.0
+}
+
+// MARK: - Environment Loader
+class EnvironmentLoader {
+    nonisolated(unsafe) static let shared = EnvironmentLoader()
+    
+    private init() {}
+    
+    // MARK: - Environment Variable Loading
+    func loadEnvironmentVariable(_ key: String) -> String? {
+        // First check system environment
+        if let value = ProcessInfo.processInfo.environment[key], !value.isEmpty {
+            return value
+        }
+        
+        // Check Info.plist
+        if let value = Bundle.main.object(forInfoDictionaryKey: key) as? String, !value.isEmpty {
+            return value
+        }
+        
+        return nil
+    }
+    
+    // MARK: - Compatibility Methods
+    func getValue(for key: String) -> String? {
+        return loadEnvironmentVariable(key)
+    }
+    
+    func printConfiguration() {
+        print("Environment Configuration:")
+        print("GEMINI_API_KEY: \(geminiAPIKey != nil ? "Set" : "Not Set")")
+        print("GOOGLE_SEARCH_API_KEY: \(googleSearchAPIKey != nil ? "Set" : "Not Set")")
+        print("GOOGLE_SEARCH_ENGINE_ID: \(googleSearchEngineID != nil ? "Set" : "Not Set")")
+    }
+    
+    // MARK: - Convenience Methods
+    var geminiAPIKey: String? {
+        return loadEnvironmentVariable("GEMINI_API_KEY")
+    }
+    
+    var googleSearchAPIKey: String? {
+        return loadEnvironmentVariable("GOOGLE_SEARCH_API_KEY")
+    }
+    
+    var googleSearchEngineID: String? {
+        return loadEnvironmentVariable("GOOGLE_SEARCH_ENGINE_ID")
+    }
+}
 
 // MARK: - API Client
 class APIClient: ObservableObject, @unchecked Sendable {

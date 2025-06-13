@@ -9,7 +9,6 @@ import SwiftUI
 import AVFoundation
 
 struct CameraView: View {
-    @State private var showAPITest = false
     @StateObject private var cameraManager = CameraManager()
     @StateObject private var permissionManager = PermissionManager.shared
     
@@ -101,19 +100,8 @@ struct CameraView: View {
                     
                     // 主要控制区域
                     HStack {
-                        // 左侧：API测试和历史记录按钮
+                        // 左侧：历史记录按钮
                         VStack(spacing: 10) {
-                            Button(action: {
-                                showAPITest = true
-                            }) {
-                                Text("API")
-                                    .font(.caption)
-                                    .foregroundColor(.white)
-                                    .frame(width: 50, height: 28)
-                                    .background(Color.blue.opacity(0.7))
-                                    .cornerRadius(8)
-                            }
-                            
                             Button(action: {
                                 showHistoryView = true
                             }) {
@@ -236,9 +224,6 @@ struct CameraView: View {
         }
         .sheet(isPresented: $showCameraSettings) {
             CameraSettingsView(cameraManager: cameraManager)
-        }
-        .sheet(isPresented: $showAPITest) {
-            APITestView()
         }
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {

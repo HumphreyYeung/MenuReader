@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Alamofire
 
 // MARK: - API Endpoint Protocol
 protocol APIEndpoint {
@@ -27,6 +28,11 @@ struct APIConfig {
     static let googleSearchEngineId = envLoader.getValue(for: "GOOGLE_SEARCH_ENGINE_ID") ?? ""
     static let googleSearchBaseURL = envLoader.getValue(for: "GOOGLE_SEARCH_URL") ?? "https://www.googleapis.com/customsearch/v1"
     
+    // OCR API配置
+    static let ocrAPIKey = envLoader.getValue(for: "OCR_API_KEY") ?? ""
+    static let ocrBaseURL = envLoader.getValue(for: "OCR_API_URL") ?? "https://api.ocr.space/parse/image"
+    static let ocrLanguage = envLoader.getValue(for: "OCR_DEFAULT_LANGUAGE") ?? "chs" // 默认中文
+    
     // 验证配置
     static var isConfigured: Bool {
         return !geminiAPIKey.isEmpty && 
@@ -34,10 +40,16 @@ struct APIConfig {
                !googleSearchEngineId.isEmpty
     }
     
+    // OCR配置验证
+    static var isOCRConfigured: Bool {
+        return !ocrAPIKey.isEmpty
+    }
+    
     // 打印配置状态
     static func printConfiguration() {
         envLoader.printConfiguration()
         print("📊 配置状态: \(isConfigured ? "✅ 完整" : "❌ 不完整")")
+        print("🔍 OCR配置: \(isOCRConfigured ? "✅ 已配置" : "❌ 未配置")")
     }
 }
 
@@ -60,7 +72,7 @@ enum GeminiEndpoint: APIEndpoint {
     var method: HTTPMethod {
         switch self {
         case .generateContent:
-            return .POST
+            return .post
         }
     }
     
@@ -101,7 +113,7 @@ enum GoogleSearchEndpoint: APIEndpoint {
     }
     
     var method: HTTPMethod {
-        return .GET
+        return .get
     }
     
     var headers: [String: String] {
@@ -110,5 +122,38 @@ enum GoogleSearchEndpoint: APIEndpoint {
     
     var body: (any Encodable)? {
         return nil
+    }
+}
+
+// MARK: - OCR API Endpoints
+enum OCREndpoint: APIEndpoint {
+    case processImage(request: OCRRequest)
+    
+    var url: URL {
+        switch self {
+        case .processImage:
+            return URL(string: APIConfig.ocrBaseURL)!
+        }
+    }
+    
+    var method: HTTPMethod {
+        switch self {
+        case .processImage:
+            return .post
+        }
+    }
+    
+    var headers: [String: String] {
+        return [
+            "apikey": APIConfig.ocrAPIKey,
+            "Content-Type": "application/x-www-form-urlencoded"
+        ]
+    }
+    
+    var body: (any Encodable)? {
+        switch self {
+        case .processImage(let request):
+            return request
+        }
     }
 } 
