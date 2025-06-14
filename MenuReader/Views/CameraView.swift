@@ -11,6 +11,7 @@ import AVFoundation
 struct CameraView: View {
     @StateObject private var cameraManager = CameraManager()
     @StateObject private var permissionManager = PermissionManager.shared
+    @StateObject private var menuAnalysisService = MenuAnalysisService.shared
     
     @State private var showPhotoLibrary = false
     @State private var showHistoryView = false
@@ -21,6 +22,13 @@ struct CameraView: View {
     @State private var showPermissionAlert = false
     @State private var permissionMessage = ""
     @State private var deviceOrientation: UIDeviceOrientation = .portrait
+    
+    // 新增：分析结果状态
+    @State private var analysisResult: MenuAnalysisResult?
+    @State private var dishImages: [String: [DishImage]] = [:]
+    @State private var showAnalysisResult = false
+    @State private var isAnalyzing = false
+    @State private var analysisError: String?
     
     // 设备方向监听
     @State private var orientationNotifier = NotificationCenter.default.publisher(
@@ -234,22 +242,12 @@ struct CameraView: View {
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
                 ImagePreviewView(image: image) {
-                    // 确认处理图像 - 使用真实OCR
+                    // 确认处理图像 - 使用MenuAnalysisService with 图片搜索
                     showImagePreview = false
-                    selectedImage = nil
                     
-                    // 启动真实OCR处理
+                    // 启动完整的菜单分析（包含图片搜索）
                     Task {
-                        let processingManager = OCRProcessingManager.shared
-                        await processingManager.startOCRProcessing(image: image)
-                        
-                        // 处理完成后可以导航到结果页面
-                        if let result = processingManager.ocrResult, result.success {
-                            print("✅ OCR处理成功！识别到 \(result.menuItems.count) 个菜品")
-                            for item in result.menuItems {
-                                print("🍽️ \(item.originalName) -> \(item.translatedName ?? "无翻译")")
-                            }
-                        }
+                        await analyzeMenuWithImages(image)
                     }
                 } onRetake: {
                     // 重新拍照
@@ -281,6 +279,81 @@ struct CameraView: View {
                     }
                 }
             }
+        }
+        .fullScreenCover(isPresented: $showAnalysisResult) {
+            if let result = analysisResult {
+                NavigationView {
+                    CategorizedMenuView(
+                        analysisResult: result,
+                        dishImages: dishImages
+                    )
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("完成") {
+                                showAnalysisResult = false
+                                selectedImage = nil
+                                resetAnalysisState()
+                            }
+                        }
+                        
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("重新拍照") {
+                                showAnalysisResult = false
+                                selectedImage = nil
+                                resetAnalysisState()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .overlay {
+            // 分析进度指示器
+            if isAnalyzing {
+                ZStack {
+                    Color.black.opacity(0.7)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.5)
+                        
+                        VStack(spacing: 8) {
+                            Text("正在分析菜单...")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            
+                            Text(menuAnalysisService.currentStage.description)
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            
+                            ProgressView(value: menuAnalysisService.analysisProgress)
+                                .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                                .frame(width: 200)
+                        }
+                    }
+                    .padding(30)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(16)
+                }
+                .transition(.opacity)
+            }
+        }
+        .alert("分析错误", isPresented: .constant(analysisError != nil)) {
+            Button("确定") {
+                analysisError = nil
+            }
+            Button("重试") {
+                if let image = selectedImage {
+                    Task {
+                        await analyzeMenuWithImages(image)
+                    }
+                }
+            }
+        } message: {
+            Text(analysisError ?? "")
         }
         .alert("权限提示", isPresented: $showPermissionAlert) {
             Button("确定", role: .cancel) { }
@@ -361,6 +434,51 @@ struct CameraView: View {
                 deviceOrientation = newOrientation
             }
         }
+    }
+    
+    // MARK: - 新增：菜单分析方法
+    private func analyzeMenuWithImages(_ image: UIImage) async {
+        print("🔄 开始完整的菜单分析（包含图片搜索）...")
+        
+        isAnalyzing = true
+        analysisError = nil
+        
+        do {
+            print("📞 调用 menuAnalysisService.analyzeMenuWithDishImages...")
+            let (result, images) = try await menuAnalysisService.analyzeMenuWithDishImages(image)
+            
+            await MainActor.run {
+                print("✅ 分析完成！识别到 \(result.items.count) 个菜品")
+                print("🖼️ 获取到 \(images.count) 组菜品图片")
+                
+                analysisResult = result
+                dishImages = images
+                isAnalyzing = false
+                showAnalysisResult = true
+                
+                // 打印详细结果
+                for item in result.items {
+                    print("🍽️ \(item.originalName) -> \(item.translatedName ?? "无翻译")")
+                    if let itemImages = images[item.originalName] {
+                        print("   📸 找到 \(itemImages.count) 张图片")
+                    }
+                }
+            }
+            
+        } catch {
+            await MainActor.run {
+                print("❌ 菜单分析失败: \(error)")
+                isAnalyzing = false
+                analysisError = "分析失败：\(error.localizedDescription)"
+            }
+        }
+    }
+    
+    private func resetAnalysisState() {
+        analysisResult = nil
+        dishImages = [:]
+        analysisError = nil
+        isAnalyzing = false
     }
 }
 
