@@ -79,57 +79,7 @@ struct MenuItemAnalysis: Codable, Identifiable {
     }
 }
 
-// MARK: - Image Search Result
-struct ImageSearchResult: Codable, Identifiable {
-    let id = UUID()
-    let title: String
-    let imageURL: String
-    let thumbnailURL: String?
-    let sourceURL: String?
-    let width: Int?
-    let height: Int?
-    
-    enum CodingKeys: String, CodingKey {
-        case title, imageURL, thumbnailURL, sourceURL, width, height
-    }
-    
-    init(title: String,
-         imageURL: String,
-         thumbnailURL: String? = nil,
-         sourceURL: String? = nil,
-         width: Int? = nil,
-         height: Int? = nil) {
-        self.title = title
-        self.imageURL = imageURL
-        self.thumbnailURL = thumbnailURL
-        self.sourceURL = sourceURL
-        self.width = width
-        self.height = height
-    }
-}
-
-// MARK: - Google Search Response
-struct GoogleSearchResponse: Codable {
-    let items: [GoogleSearchItem]?
-    let searchInformation: GoogleSearchInformation?
-}
-
-struct GoogleSearchItem: Codable {
-    let title: String
-    let link: String
-    let image: GoogleImageInfo?
-}
-
-struct GoogleImageInfo: Codable {
-    let contextLink: String?
-    let height: Int?
-    let width: Int?
-    let byteSize: Int?
-    let thumbnailLink: String?
-    let thumbnailHeight: Int?
-    let thumbnailWidth: Int?
-}
-
+// MARK: - Search Information (不与GoogleSearchService重复的类型)
 struct GoogleSearchInformation: Codable {
     let searchTime: Double?
     let formattedSearchTime: String?
@@ -145,4 +95,10 @@ struct MenuProcessResult: Codable {
     init(items: [MenuItemAnalysis]) {
         self.items = items
     }
-} 
+}
+
+// MARK: - 注释：以下类型已移动到GoogleSearchService.swift避免重复定义
+// - ImageSearchResult
+// - GoogleSearchResponse  
+// - GoogleSearchItem
+// - GoogleImageInfo 

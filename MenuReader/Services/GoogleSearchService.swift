@@ -2,195 +2,283 @@
 //  GoogleSearchService.swift
 //  MenuReader
 //
-//  Created by Humphrey Yeung on 6/10/25.
+//  Created by MenuReader on 2025-06-13.
 //
 
 import Foundation
 import UIKit
 
-class GoogleSearchService: ObservableObject, @unchecked Sendable {
+/// 统一的图片搜索和管理服务 - 整合了ImageService功能
+@MainActor
+final class GoogleSearchService: ObservableObject {
+    
+    // MARK: - Singleton
     static let shared = GoogleSearchService()
     
-    private let apiClient: APIClient
-    private let maxResults = 10
+    // MARK: - Published Properties
+    
+    /// 图片加载状态
+    @Published private(set) var loadingStates: [String: ImageLoadingState] = [:]
+    
+    // MARK: - Private Properties
+    
+    private let apiClient: NetworkService
+    
+    // MARK: - Initialization
     
     private init() {
-        self.apiClient = APIClient.shared
+        self.apiClient = NetworkService.shared
     }
     
-    // MARK: - Image Search
+    // MARK: - Public Methods - 菜品图片获取（整合自ImageService）
+    
+    /// 获取菜品图片（主要方法）
+    func getDishImages(for menuItem: MenuItemAnalysis, count: Int = 3) async throws -> [DishImage] {
+        let cacheKey = generateCacheKey(for: menuItem)
+        let searchQuery = menuItem.imageSearchQuery ?? menuItem.translatedName ?? menuItem.originalName
+        
+        print("🖼️ GoogleSearchService.getDishImages - 开始获取图片")
+        print("📝 菜品名称: \(menuItem.originalName)")
+        print("🔍 搜索查询: \(searchQuery)")
+        
+        // 更新加载状态
+        loadingStates[cacheKey] = .loading
+        
+        do {
+            // 从API获取图片
+            let searchResults = try await searchImages(for: searchQuery, count: count)
+            
+            print("✅ 搜索返回 \(searchResults.count) 个搜索结果")
+            
+            // 转换为DishImage
+            let dishImages = convertToDishImages(searchResults, for: menuItem)
+            
+            print("✅ 转换为 \(dishImages.count) 个 DishImage 对象")
+            
+            // 更新状态
+            loadingStates[cacheKey] = .loaded(dishImages)
+            
+            return dishImages
+            
+        } catch {
+            print("❌ GoogleSearchService.getDishImages 失败: \(error)")
+            loadingStates[cacheKey] = .failed(error)
+            throw ImageServiceError.loadingFailed(error.localizedDescription)
+        }
+    }
+    
+    /// 获取加载状态
+    func getLoadingState(for menuItem: MenuItemAnalysis) -> ImageLoadingState {
+        let cacheKey = generateCacheKey(for: menuItem)
+        return loadingStates[cacheKey] ?? .idle
+    }
+    
+    /// 清理状态
+    func clearStates() {
+        loadingStates.removeAll()
+    }
+    
+    // MARK: - Public Methods - 图片搜索
+    
+    /// 搜索图片
     func searchImages(for query: String, count: Int = 5) async throws -> [ImageSearchResult] {
-        // 清理搜索查询
-        let cleanQuery = cleanSearchQuery(query)
+        print("🔍 GoogleSearchService.searchImages 开始搜索: \(query)")
         
-        let endpoint = GoogleSearchEndpoint.searchImages(query: cleanQuery, num: min(count, maxResults))
-        
-        do {
-            let response = try await apiClient.request(endpoint, responseType: GoogleSearchResponse.self)
-            return parseImageSearchResults(response)
-        } catch {
-            throw error
-        }
-    }
-    
-    // MARK: - Batch Search
-    func searchImagesForMenuItems(_ menuItems: [MenuItemAnalysis]) async throws -> [String: [ImageSearchResult]] {
-        var results: [String: [ImageSearchResult]] = [:]
-        
-        // 并发搜索多个菜品
-        try await withThrowingTaskGroup(of: (String, [ImageSearchResult]).self) { group in
-            for item in menuItems.prefix(5) { // 限制并发数量
-                group.addTask {
-                    let query = item.imageSearchQuery ?? item.translatedName ?? item.originalName
-                    let images = try await self.searchImages(for: query, count: 3)
-                    return (item.originalName, images)
-                }
-            }
-            
-            for try await (itemName, images) in group {
-                results[itemName] = images
-            }
-        }
-        
-        return results
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func cleanSearchQuery(_ query: String) -> String {
-        // 移除价格和特殊字符，保留菜品名称
-        var cleanQuery = query
-        
-        // 移除常见的价格模式
-        let pricePatterns = [
-            "\\$[0-9]+(\\.[0-9]{2})?", // $12.99
-            "[0-9]+\\.[0-9]{2}", // 12.99
-            "¥[0-9]+", // ¥100
-            "€[0-9]+(\\.[0-9]{2})?", // €12.99
-            "£[0-9]+(\\.[0-9]{2})?", // £12.99
-            "[0-9]+元", // 100元
-            "[0-9]+円" // 100円
-        ]
-        
-        for pattern in pricePatterns {
-            cleanQuery = cleanQuery.replacingOccurrences(
-                of: pattern,
-                with: "",
-                options: .regularExpression
-            )
-        }
-        
-        // 移除特殊字符，保留字母、数字、空格和中文字符
-        let allowedCharacters = CharacterSet.alphanumerics
-            .union(.whitespacesAndNewlines)
-            .union(CharacterSet(charactersIn: "一二三四五六七八九十"))
-        
-        cleanQuery = String(cleanQuery.unicodeScalars.filter { allowedCharacters.contains($0) })
-        
-        // 清理多余空格
-        cleanQuery = cleanQuery
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-        
-        // 添加 "food" 关键词以提高搜索准确性
-        if !cleanQuery.isEmpty {
-            cleanQuery += " food dish"
-        }
-        
-        return cleanQuery
-    }
-    
-    private func parseImageSearchResults(_ response: GoogleSearchResponse) -> [ImageSearchResult] {
-        guard let items = response.items else {
-            return []
-        }
-        
-        return items.compactMap { item in
-            // 确保有有效的图片链接
-            guard !item.link.isEmpty else { return nil }
-            
-            let result = ImageSearchResult(
-                title: item.title,
-                imageURL: item.link,
-                thumbnailURL: item.image?.thumbnailLink,
-                sourceURL: item.image?.contextLink,
-                width: item.image?.width,
-                height: item.image?.height
-            )
-            
-            return result
-        }
-    }
-    
-    // MARK: - Image Validation
-    func validateImageURL(_ urlString: String) async -> Bool {
-        guard let url = URL(string: urlString) else {
-            return false
-        }
+        let endpoint = GoogleSearchEndpoint.searchImages(query: query, num: count)
         
         do {
-            let (_, response) = try await URLSession.shared.data(from: url)
+            let response: GoogleSearchResponse = try await apiClient.request(
+                endpoint,
+                responseType: GoogleSearchResponse.self
+            )
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return false
-            }
+            let results = parseSearchResponse(response)
+            print("✅ GoogleSearchService.searchImages 找到 \(results.count) 个结果")
+            return results
             
-            // 检查状态码和内容类型
-            let isValidStatus = (200...299).contains(httpResponse.statusCode)
-            let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
-            let isImage = contentType.hasPrefix("image/")
-            
-            return isValidStatus && isImage
         } catch {
-            return false
+            print("❌ GoogleSearchService.searchImages 失败: \(error)")
+            throw GoogleSearchError.searchFailed(error.localizedDescription)
         }
     }
     
-    // MARK: - Testing
+    /// 搜索菜品相关图片
+    func searchDishImages(dishName: String, count: Int = 5) async throws -> [ImageSearchResult] {
+        let query = "\(dishName) dish food recipe"
+        return try await searchImages(for: query, count: count)
+    }
+    
+    // MARK: - Service Health
+    
+    /// 测试搜索服务连接
     func testConnection() async throws -> Bool {
-        let testResults = try await searchImages(for: "pizza", count: 1)
+        let testResults = try await searchImages(for: "test food", count: 1)
         return !testResults.isEmpty
+    }
+    
+    // MARK: - Private Methods
+    
+    private func generateCacheKey(for menuItem: MenuItemAnalysis) -> String {
+        let name = menuItem.translatedName ?? menuItem.originalName
+        return "dish_images_\(name.hash)"
+    }
+    
+    private func convertToDishImages(_ searchResults: [ImageSearchResult], for menuItem: MenuItemAnalysis) -> [DishImage] {
+        return searchResults.compactMap { result in
+            // 基本验证
+            guard !result.imageURL.isEmpty else { return nil }
+            
+            return DishImage(
+                id: result.id,
+                title: result.title,
+                imageURL: result.imageURL,
+                thumbnailURL: result.thumbnailURL ?? result.imageURL,
+                sourceURL: result.sourceURL,
+                width: result.width,
+                height: result.height,
+                menuItemName: menuItem.originalName,
+                isLoaded: false
+            )
+        }
+    }
+    
+    private func parseSearchResponse(_ response: GoogleSearchResponse) -> [ImageSearchResult] {
+        return response.items?.compactMap { item in
+            guard let imageInfo = item.image,
+                  let link = item.link else {
+                return nil
+            }
+            
+            return ImageSearchResult(
+                id: UUID(),
+                title: item.title ?? "未知图片",
+                imageURL: link,
+                thumbnailURL: imageInfo.thumbnailLink,
+                sourceURL: item.displayLink,
+                width: imageInfo.width,
+                height: imageInfo.height
+            )
+        } ?? []
     }
 }
 
-// MARK: - Search Query Enhancement
-extension GoogleSearchService {
-    // 根据菜品分析结果优化搜索查询
-    func enhanceSearchQuery(for menuItem: MenuItemAnalysis) -> String {
-        var queryComponents: [String] = []
-        
-        // 优先使用翻译后的名称
-        if let translatedName = menuItem.translatedName, !translatedName.isEmpty {
-            queryComponents.append(translatedName)
-        } else {
-            queryComponents.append(menuItem.originalName)
-        }
-        
-        // 添加分类信息
-        if let category = menuItem.category, !category.isEmpty {
-            queryComponents.append(category)
-        }
-        
-        // 添加描述关键词
-        if let description = menuItem.description, !description.isEmpty {
-            let keywords = extractKeywords(from: description)
-            queryComponents.append(contentsOf: keywords.prefix(2))
-        }
-        
-        let query = queryComponents.joined(separator: " ")
-        return cleanSearchQuery(query)
-    }
+// MARK: - Supporting Types
+
+/// 图片加载状态
+enum ImageLoadingState: Equatable {
+    case idle
+    case loading
+    case loaded([DishImage])
+    case failed(Error)
     
-    private func extractKeywords(from description: String) -> [String] {
-        let commonWords = ["with", "and", "or", "the", "a", "an", "in", "on", "at", "to", "for", "of", "by"]
-        
-        return description
-            .lowercased()
-            .components(separatedBy: .punctuationCharacters)
-            .joined(separator: " ")
-            .components(separatedBy: .whitespaces)
-            .filter { word in
-                word.count > 2 && !commonWords.contains(word)
-            }
+    static func == (lhs: ImageLoadingState, rhs: ImageLoadingState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.loading, .loading):
+            return true
+        case (.loaded(let lhsImages), .loaded(let rhsImages)):
+            return lhsImages.count == rhsImages.count
+        case (.failed, .failed):
+            return true
+        default:
+            return false
+        }
     }
+}
+
+/// 菜品图片模型
+struct DishImage: Identifiable, Codable {
+    let id: UUID
+    let title: String
+    let imageURL: String
+    let thumbnailURL: String
+    let sourceURL: String?
+    let width: Int?
+    let height: Int?
+    let menuItemName: String
+    var isLoaded: Bool
+    
+    init(id: UUID = UUID(),
+         title: String,
+         imageURL: String,
+         thumbnailURL: String,
+         sourceURL: String? = nil,
+         width: Int? = nil,
+         height: Int? = nil,
+         menuItemName: String,
+         isLoaded: Bool = false) {
+        self.id = id
+        self.title = title
+        self.imageURL = imageURL
+        self.thumbnailURL = thumbnailURL
+        self.sourceURL = sourceURL
+        self.width = width
+        self.height = height
+        self.menuItemName = menuItemName
+        self.isLoaded = isLoaded
+    }
+}
+
+/// 图片服务错误
+enum ImageServiceError: LocalizedError {
+    case loadingFailed(String)
+    case invalidURL
+    case networkError
+    
+    var errorDescription: String? {
+        switch self {
+        case .loadingFailed(let message):
+            return "图片加载失败: \(message)"
+        case .invalidURL:
+            return "无效的图片URL"
+        case .networkError:
+            return "网络连接错误"
+        }
+    }
+}
+
+/// Google搜索错误
+enum GoogleSearchError: LocalizedError {
+    case searchFailed(String)
+    case invalidResponse
+    case apiKeyMissing
+    
+    var errorDescription: String? {
+        switch self {
+        case .searchFailed(let message):
+            return "搜索失败: \(message)"
+        case .invalidResponse:
+            return "无效的响应格式"
+        case .apiKeyMissing:
+            return "缺少API密钥"
+        }
+    }
+}
+
+// MARK: - Google Search Response Models
+
+struct GoogleSearchResponse: Codable {
+    let items: [GoogleSearchItem]?
+}
+
+struct GoogleSearchItem: Codable {
+    let title: String?
+    let link: String?
+    let displayLink: String?
+    let image: GoogleImageInfo?
+}
+
+struct GoogleImageInfo: Codable {
+    let width: Int?
+    let height: Int?
+    let thumbnailLink: String?
+}
+
+struct ImageSearchResult: Identifiable {
+    let id: UUID
+    let title: String
+    let imageURL: String
+    let thumbnailURL: String?
+    let sourceURL: String?
+    let width: Int?
+    let height: Int?
 } 

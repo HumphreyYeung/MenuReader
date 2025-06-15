@@ -14,7 +14,6 @@ class MenuAnalysisService: ObservableObject {
     
     private let geminiService: GeminiService
     private let googleSearchService: GoogleSearchService
-    private let imageService: ImageService
     
     @Published var isAnalyzing: Bool = false
     @Published var analysisProgress: Double = 0.0
@@ -26,7 +25,6 @@ class MenuAnalysisService: ObservableObject {
     private init() {
         self.geminiService = GeminiService.shared
         self.googleSearchService = GoogleSearchService.shared
-        self.imageService = ImageService.shared
     }
     
     // MARK: - Analysis Stages
@@ -106,7 +104,31 @@ class MenuAnalysisService: ObservableObject {
             
             // Stage 5: 图片搜索
             await updateStage(.imageSearch)
-            let searchResults = try await googleSearchService.searchImagesForMenuItems(analysisResult.items)
+            // 批量获取菜品图片（限制数量避免API限制）
+            var searchResults: [String: [ImageSearchResult]] = [:]
+            let limitedItems = Array(analysisResult.items.prefix(5))
+            
+            for menuItem in limitedItems {
+                do {
+                    let dishImages = try await googleSearchService.getDishImages(for: menuItem, count: 2)
+                    // 转换DishImage为ImageSearchResult
+                    let imageSearchResults = dishImages.map { dishImage in
+                        ImageSearchResult(
+                            id: dishImage.id,
+                            title: dishImage.title,
+                            imageURL: dishImage.imageURL,
+                            thumbnailURL: dishImage.thumbnailURL,
+                            sourceURL: dishImage.sourceURL,
+                            width: dishImage.width,
+                            height: dishImage.height
+                        )
+                    }
+                    searchResults[menuItem.originalName] = imageSearchResults
+                } catch {
+                    print("⚠️ \(menuItem.originalName) 图片获取失败: \(error)")
+                    searchResults[menuItem.originalName] = []
+                }
+            }
             lastSearchResults = searchResults
             
             // 完成
@@ -156,50 +178,73 @@ class MenuAnalysisService: ObservableObject {
             await updateStage(.menuExtraction)
             print("✅ 菜品提取完成")
             
-            // Stage 5: 菜品图片获取（使用新的ImageService）
+            // Stage 5: 菜品图片获取（使用GoogleSearchService）
             print("🖼️ Stage 5: 菜品图片获取...")
             await updateStage(.imageSearch)
-            print("📞 调用 imageService.getDishImagesForMenuItems...")
-            let dishImages = try await imageService.getDishImagesForMenuItems(analysisResult.items)
-            print("✅ 图片获取完成，获取到 \(dishImages.count) 组图片")
+            print("📞 调用 googleSearchService.getDishImagesForMenuItems...")
+            print("📝 待搜索菜品数量: \(analysisResult.items.count)")
+            
+            // 批量获取菜品图片（限制数量避免API限制）
+            var dishImages: [String: [DishImage]] = [:]
+            let limitedItems = Array(analysisResult.items.prefix(5))
+            
+            for menuItem in limitedItems {
+                do {
+                    let images = try await googleSearchService.getDishImages(for: menuItem, count: 2)
+                    dishImages[menuItem.originalName] = images
+                    print("  📸 \(menuItem.originalName): \(images.count) 张图片")
+                } catch {
+                    print("  ⚠️ \(menuItem.originalName) 图片获取失败: \(error)")
+                    dishImages[menuItem.originalName] = []
+                }
+            }
+            
             lastDishImages = dishImages
+            print("✅ 菜品图片获取完成，总计 \(dishImages.values.flatMap { $0 }.count) 张图片")
             
             // 完成
-            print("🎉 所有阶段完成")
             await updateStage(.completed)
+            print("🎉 完整分析流程完成！")
             
             return (analysisResult, dishImages)
             
         } catch {
-            print("❌ MenuAnalysisService 分析失败: \(error)")
-            print("❌ 错误类型: \(type(of: error))")
+            print("❌ 分析过程出错: \(error)")
             await updateStage(.error(error.localizedDescription))
             throw error
         }
     }
     
-    // MARK: - Individual Steps
-    func analyzeTextOnly(_ image: UIImage) async throws -> MenuAnalysisResult {
+    // MARK: - Individual Operations
+    
+    /// 仅进行菜单分析（不包含图片搜索）
+    func analyzeMenuOnly(_ image: UIImage) async throws -> MenuAnalysisResult {
+        print("🔄 MenuAnalysisService.analyzeMenuOnly 开始...")
+        
         guard !isAnalyzing else {
             throw AnalysisError.alreadyInProgress
         }
         
         isAnalyzing = true
+        analysisProgress = 0.0
         
         defer {
             isAnalyzing = false
         }
         
         do {
+            // Stage 1: 预处理
             await updateStage(.preprocessing)
             let processedImage = preprocessImage(image)
             
+            // Stage 2-4: Gemini 分析
             await updateStage(.textRecognition)
-            let result = try await geminiService.analyzeMenuImage(processedImage)
-            lastAnalysisResult = result
+            let analysisResult = try await geminiService.analyzeMenuImage(processedImage)
+            lastAnalysisResult = analysisResult
             
             await updateStage(.completed)
-            return result
+            
+            return analysisResult
             
         } catch {
             await updateStage(.error(error.localizedDescription))
@@ -207,103 +252,111 @@ class MenuAnalysisService: ObservableObject {
         }
     }
     
+    /// 为菜品项目搜索图片
     func searchImagesForMenuItem(_ menuItem: MenuItemAnalysis) async throws -> [ImageSearchResult] {
-        let query = googleSearchService.enhanceSearchQuery(for: menuItem)
-        return try await googleSearchService.searchImages(for: query, count: 5)
-    }
-    
-    // MARK: - Dish Image Methods (Task005)
-    
-    /// 获取菜品图片（使用新的ImageService）
-    func getDishImages(for menuItem: MenuItemAnalysis, count: Int = 3) async throws -> [DishImage] {
-        return try await imageService.getDishImages(for: menuItem, count: count)
+        let dishImages = try await googleSearchService.getDishImages(for: menuItem, count: 3)
+        
+        // 转换DishImage为ImageSearchResult
+        return dishImages.map { dishImage in
+            ImageSearchResult(
+                id: dishImage.id,
+                title: dishImage.title,
+                imageURL: dishImage.imageURL,
+                thumbnailURL: dishImage.thumbnailURL,
+                sourceURL: dishImage.sourceURL,
+                width: dishImage.width,
+                height: dishImage.height
+            )
+        }
     }
     
     /// 批量获取菜品图片
-    func getDishImagesForMenuItems(_ menuItems: [MenuItemAnalysis]) async throws -> [String: [DishImage]] {
-        let dishImages = try await imageService.getDishImagesForMenuItems(menuItems)
+    func getDishImagesForMenuItems(_ menuItems: [MenuItemAnalysis], imagesPerItem: Int = 2) async throws -> [String: [DishImage]] {
+        print("🔄 MenuAnalysisService.getDishImagesForMenuItems 开始...")
+        print("📝 菜品数量: \(menuItems.count), 每个菜品图片数: \(imagesPerItem)")
+        
+        var dishImages: [String: [DishImage]] = [:]
+        
+        // 限制并发数量，避免API限制
+        let limitedItems = Array(menuItems.prefix(8))
+        
+        for menuItem in limitedItems {
+            do {
+                print("🔍 搜索菜品图片: \(menuItem.originalName)")
+                let images = try await googleSearchService.getDishImages(for: menuItem, count: imagesPerItem)
+                dishImages[menuItem.originalName] = images
+                print("  ✅ 获取到 \(images.count) 张图片")
+                
+                // 添加延迟避免API限制
+                try await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+                
+            } catch {
+                print("  ⚠️ \(menuItem.originalName) 图片获取失败: \(error)")
+                dishImages[menuItem.originalName] = []
+            }
+        }
+        
         lastDishImages = dishImages
+        print("✅ 批量图片获取完成，总计 \(dishImages.values.flatMap { $0 }.count) 张图片")
+        
         return dishImages
     }
     
-    /// 获取菜品图片加载状态
-    func getDishImageLoadingState(for menuItem: MenuItemAnalysis) -> ImageLoadingState {
-        return imageService.getLoadingState(for: menuItem)
+    // MARK: - Helper Methods
+    
+    private func updateStage(_ stage: AnalysisStage) async {
+        await MainActor.run {
+            currentStage = stage
+            analysisProgress = stage.progress
+        }
     }
     
-    // MARK: - Helper Methods
     private func preprocessImage(_ image: UIImage) -> UIImage {
-        // 简单的预处理：确保图片方向正确
-        guard image.imageOrientation != .up else {
+        // 简单的图片预处理：调整大小以优化API调用
+        let maxSize: CGFloat = 1024
+        let size = image.size
+        
+        if size.width <= maxSize && size.height <= maxSize {
             return image
         }
         
-        let renderer = UIGraphicsImageRenderer(size: image.size, format: UIGraphicsImageRendererFormat.default())
-        let orientedImage = renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: image.size))
-        }
+        let scale = min(maxSize / size.width, maxSize / size.height)
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
         
-        return orientedImage
+        UIGraphicsBeginImageContextWithOptions(newSize, false, 0.0)
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        
+        return resizedImage ?? image
     }
     
-    private func updateStage(_ stage: AnalysisStage) async {
-        currentStage = stage
-        analysisProgress = stage.progress
-    }
-    
-    // MARK: - Service Health Check
-    func checkServiceHealth() async -> ServiceHealthStatus {
-        var status = ServiceHealthStatus()
+    // MARK: - Error Types
+    enum AnalysisError: LocalizedError {
+        case alreadyInProgress
+        case imageProcessingFailed
+        case analysisTimeout
+        case networkError(Error)
+        case invalidResponse
         
-        // 检查API配置
-        status.isConfigured = APIConfig.isConfigured
-        
-        if status.isConfigured {
-            // 测试Gemini连接
-            do {
-                status.geminiConnected = try await geminiService.testConnection()
-            } catch {
-                status.geminiError = error.localizedDescription
-            }
-            
-            // 测试Google Search连接
-            do {
-                status.searchConnected = try await googleSearchService.testConnection()
-            } catch {
-                status.searchError = error.localizedDescription
+        var errorDescription: String? {
+            switch self {
+            case .alreadyInProgress:
+                return "分析已在进行中"
+            case .imageProcessingFailed:
+                return "图片处理失败"
+            case .analysisTimeout:
+                return "分析超时"
+            case .networkError(let error):
+                return "网络错误: \(error.localizedDescription)"
+            case .invalidResponse:
+                return "无效的响应数据"
             }
         }
-        
-        return status
-    }
-    
-    // MARK: - Reset
-    func resetAnalysis() {
-        currentStage = .idle
-        analysisProgress = 0.0
-        lastAnalysisResult = nil
-        lastSearchResults = [:]
     }
 }
 
 // MARK: - Supporting Types
-enum AnalysisError: LocalizedError {
-    case alreadyInProgress
-    case invalidImage
-    case serviceUnavailable
-    
-    var errorDescription: String? {
-        switch self {
-        case .alreadyInProgress:
-            return "分析已在进行中"
-        case .invalidImage:
-            return "无效的图片"
-        case .serviceUnavailable:
-            return "服务暂不可用"
-        }
-    }
-}
-
 struct ServiceHealthStatus {
     var isConfigured: Bool = false
     var geminiConnected: Bool = false

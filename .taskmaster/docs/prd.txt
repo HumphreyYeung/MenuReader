@@ -1,0 +1,184 @@
+#### Product Requirement Document: MenuReader iOS App
+### 1. Introduction
+
+MenuReader is an iOS application designed to assist international travelers, particularly in regions like Europe and Japan, where restaurant menus are often text-only and in a foreign language. The app aims to solve the pain point of not understanding menu items and not knowing what the dishes look like, by providing OCR, translation, and visual references for menu items.
+
+### 2. Goals
+
+- To enable users to quickly understand foreign language menus.
+- To provide visual references (actual photos or AI-generated images) for menu items.
+- To streamline the ordering process in foreign restaurants by generating a native-language order slip.
+- To help users identify potential allergens in menu items.
+
+### 3. Target Audience
+
+- International tourists traveling in countries where they do not speak or read the local language (e.g., English speakers in Japan, Chinese speakers in Italy).
+- Users who prefer visual cues when selecting food items.
+- Users with dietary restrictions or allergies.
+
+### 4. Key Features
+
+1. **Menu OCR and Translation:**
+    - The app shall allow users to capture a photo of a menu using the device camera.
+    - The app shall allow users to upload an existing menu image from their photo library.
+    - The app shall perform OCR on the image to extract text (dish names).
+    - The app shall translate the extracted dish names into the user's preferred target language.
+2. **Dish Image Retrieval & Generation:**
+    - For each identified dish, the app shall search Google Images for a reference picture.
+    - If Google Images does not yield a suitable result, the app shall use an AI image generation model to create a reference picture for the dish.
+    - The app shall return the found or generated image for each dish.
+3. **Categorized Dish Display:**
+    - The app shall display the processed menu items as a list of cards, potentially categorized if such information can be inferred.
+    - Each dish card shall display:
+        - Translated dish name.
+        - Original (untranslated) dish name.
+        - Dish reference image.
+        - An "Add" icon.
+        - Potential allergen warnings (if allergens are set by the user and identified).
+4. **Shopping Cart Functionality:**
+    - Users shall be able to tap the "Add" icon on a dish card to add it to a "Shopping Cart" or "Order List."
+    - Users shall be able to view the items in their cart.
+    - Users shall be able to remove items from the cart.
+5. **Order Slip Generation:**
+    - From the shopping cart, users shall be able to generate an "Order Slip."
+    - The Order Slip shall display the list of selected dishes in their original (untranslated) language.
+    - This slip is intended to be shown to restaurant staff to facilitate ordering.
+6. **Allergen Management:**
+    - Users shall be able to define a list of their allergens in a "Personal Profile" section.
+    - When menu items are processed, the app shall attempt to identify potential allergens present in the dishes based on the user's list.
+    - If a potential allergen is identified for a dish, a warning or indicator shall be displayed on its card.
+    - If no allergens are set by the user, this feature will not display any warnings.
+
+### 5. Main Page Framework (UI/UX Flow)
+
+- **Default View:** The app opens directly to a live camera preview screen (similar to Snapchat).
+- **Capture Button:** A prominent button to take a photo of the menu.
+- **Upload Entry:** An option to select an image from the device's photo library.
+- **Scan History:**
+    - An accessible section to view previously scanned and processed menus.
+    - Each history item should ideally store the recognized dishes, translations, and images.
+- **Profile/Settings Page:**
+    - Entry point for user settings.
+    - Allergen management.
+    - Privacy policy and other relevant information.
+
+-----------------------------
+#### Technical Architecture Document: MenuReader iOS App
+### 1. Overview
+
+This document outlines the technical architecture for the MenuReader iOS application. It details the components involved, their interactions, and the data flow for the core feature of processing a menu image to display translated dishes with reference images.
+
+### 2. System Components
+
+- **Client (iOS Application):**
+    - Native iOS application (Swift/Objective-C).
+    - Responsibilities: UI/UX, camera access, image capture/upload, local storage for settings (allergens) and history, communication with the API Gateway.
+- **API Gateway (G):**
+    - Single entry point for all client requests.
+    - Routes requests to appropriate backend microservices.
+    - Aggregates responses from microservices.
+- **OCR Service (O):**
+    - Receives menu images.
+    - Integrates with a multimodal AI model (e.g., Gemini Pro Vision) for text extraction.
+    - Integrates with a Translation Service to translate extracted text.
+    - Structures the OCR and translation results into a list of dishes.
+- **Translation Service (T):**
+    - Receives text from the OCR Service.
+    - Translates the text into the specified target language.
+    - Returns translated text to the OCR Service. (Note: This could be an external API or part of the multimodal AI model's capability).
+- **Image Service (I):**
+    - Receives dish names.
+    - Queries Google Image Search for reference images.
+    - If Google Image Search fails or returns no relevant results, it requests image generation from an AI model (e.g., Gemini Imagen-2).
+    - Returns image URLs or image metadata.
+- **Database (D):**
+    - Stores processed menu results for history.
+    - Potentially stores user profiles, including allergen preferences.
+    - Could be a NoSQL or SQL database depending on scaling and query needs.
+
+### 3. Technology Stack (Proposed)
+
+- **Client:** iOS (Swift or Objective-C)
+- **OCR Engine:** Gemini Pro Vision (Apple Vision could be an option if Gemini doesn’t work)
+- **Translation Engine:** Gemini Pro Vision's translation capabilities
+- **Image Search:** Google Custom Search JSON API (for Google Images)
+- **Image Generation:** Google Imagen-2 (via Vertex AI or similar platform)
+- **Backend Framework:** Python/Flask
+- **API Gateway:** Google Cloud Endpoints
+- **Database:** Firebase Firestore
+
+### 4. Frontend-Backend Interaction & Data Flow
+
+**The primary interaction for menu processing is detailed below:
+    sequenceDiagram
+        participant C as Client (iOS App)
+        participant G as API Gateway
+        participant O as OCR Service
+        participant T as Translation Service
+        participant I as Image Service
+        participant D as Database
+        participant GeminiPV as Gemini Pro Vision
+        participant GoogleIS as Google Image Search
+        participant GeminiI2 as Gemini Imagen-2
+
+        C->>G: POST /process-menu (image + metadata [targetLanguage])
+        G->>O: Forward image for OCR (image)
+        O->>GeminiPV: Request text extraction (gemini-pro-vision request with image)
+        GeminiPV-->>O: Return raw text (dish names, descriptions)
+        O->>T: Request text translation (raw text, targetLanguage)
+        T-->>O: Return translated text
+        O->>G: Return structured dish data (original & translated names)
+
+        loop For each dish
+            G->>I: Request dish image (dishName)
+            I->>GoogleIS: Image search request (dishName)
+            alt Found results
+                GoogleIS-->>I: Return image URL(s)
+            else Not found or irrelevant
+                I->>GeminiI2: Request image generation (Imagen-2 prompt based on dishName)
+                GeminiI2-->>I: Return generated image URL
+            end
+            I->>G: Return image metadata (URL) for the dish
+        end
+
+        G->>D: Store processed menu result (structured dish data, image URLs, original image)
+        D-->>G: Confirm storage
+        G-->>C: Return complete dish data (list of dishes with original/translated names, image URLs, potential allergens)
+
+**Detailed Flow Description:**
+
+1. **Client Request:** The iOS client captures/uploads a menu image and sends it along with metadata (e.g., desired target language for translation) to the API Gateway via a POST request to /process-menu.
+2. **OCR Processing:**
+    - The API Gateway forwards the image to the OCR Service.
+    - The OCR Service sends the image to a multimodal AI like Gemini Pro Vision for text extraction.
+    - Gemini Pro Vision returns the extracted raw text.
+3. **Translation:**
+    - The OCR Service sends the extracted raw text to the Translation Service (or utilizes the translation capabilities of the multimodal AI).
+    - The Translation Service returns the translated text.
+    - The OCR Service structures this data into a list of dishes, each with its original and translated name, and sends it back to the API Gateway.
+4. **Image Retrieval/Generation (Iterative):**
+    - For each dish identified and translated:
+        - The API Gateway requests an image for the dish from the Image Service.
+        - The Image Service first attempts to find a relevant image using Google Image Search.
+        - If a suitable image is found, its URL is returned.
+        - If no suitable image is found, the Image Service requests an AI image generation model (e.g., Imagen-2) to create an image based on the dish name (and potentially its description, if available). The URL of the generated image is returned.
+        - The Image Service sends the image URL (or metadata) back to the API Gateway.
+5. **Data Storage:**
+    - The API Gateway sends the complete processed menu data (original text, translated text, dish names, image URLs, etc.) to the Database for storage, enabling the "Scan History" feature.
+    - The Database confirms the storage.
+6. **Client Response:**
+    - The API Gateway aggregates all the information (translated dish names, original names, image URLs, and any allergen information if applicable) and sends it back to the client.
+    - The client then renders this information as a categorized list of dish cards.
+
+### 5. Allergen Check Integration (Conceptual)
+
+- When the user sets allergens in their profile, these are stored (either locally on the client or in the Database via an API).
+- During step 3 or after step 6, before sending the final response to the client:
+    - The API Gateway (or a dedicated service) would compare the translated dish names/descriptions against the user's allergen list.
+    - This might involve simple keyword matching or a more sophisticated NLP approach if ingredient lists are extracted.
+    - Any matches would be flagged and included in the response to the client for display on the dish cards.
+
+### 6. Data Persistence
+
+- **Client-side:** User preferences (target language, allergens), shopping cart items (transient), potentially a cache of recent history for faster offline access.
+- **Server-side (Database):** Full scan history (processed menus, images, translations), user accounts and profiles (if implemented for synchronization).

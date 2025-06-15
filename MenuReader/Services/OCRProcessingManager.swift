@@ -52,12 +52,12 @@ final class OCRProcessingManager: ObservableObject {
     
     // MARK: - Services
     
-    private let ocrService: OCRService
+    private let geminiService: GeminiService
     
     // MARK: - Initialization
     
     private init() {
-        self.ocrService = OCRService()
+        self.geminiService = GeminiService.shared
     }
     
     // MARK: - Language Settings
@@ -117,10 +117,18 @@ final class OCRProcessingManager: ObservableObject {
             let targetLanguage = getTargetLanguage()
             print("🌍 使用目标语言: \(targetLanguage.displayName)")
             
-            let result = try await ocrService.processImage(
-                image,
-                targetLanguage: targetLanguage,
-                preferences: processingPreferences
+            let analysisResult = try await geminiService.analyzeMenuImageWithLanguage(image, targetLanguage: targetLanguage)
+            
+            // 转换为OCRProcessingResult格式
+            let result = OCRProcessingResult(
+                requestId: UUID().uuidString,
+                success: true,
+                confidence: analysisResult.confidence,
+                processingTime: analysisResult.processingTime,
+                detectedLanguage: analysisResult.language,
+                menuItems: analysisResult.items,
+                rawText: analysisResult.items.map { "\($0.originalName) - \($0.price ?? "")" }.joined(separator: "\n"),
+                error: nil
             )
             
             // 阶段3: 结果分析

@@ -241,7 +241,7 @@ struct CameraView: View {
         }
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
-                ImagePreviewView(image: image) {
+                PhotoPreviewView(image: image) {
                     // 确认处理图像 - 使用MenuAnalysisService with 图片搜索
                     showImagePreview = false
                     

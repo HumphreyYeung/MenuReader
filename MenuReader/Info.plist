@@ -7,7 +7,7 @@
 	<key>GEMINI_API_KEY</key>
 	<string>AIzaSyDgbnOFhQ8yF8uwE8NBqstMzFsIt2u1TRE</string>
 	<key>GOOGLE_SEARCH_API_KEY</key>
-	<string>AIzaSyDgbnOFhQ8yF8uwE8NBqstMzFsIt2u1TRE</string>
+	<string>AIzaSyB-gjAd8sVMEqrmKvDgWd_s5GEWXJGBr_Q</string>
 	<key>GOOGLE_SEARCH_ENGINE_ID</key>
 	<string>d411db1fbe9ef41d4</string>
 	<key>NSAppTransportSecurity</key>
@@ -17,5 +17,7 @@
 		<string>fetch</string>
 		<string>processing</string>
 	</array>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.HumphreyYeung.MenuReader</string>
 </dict>
 </plist>

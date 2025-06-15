@@ -1,5 +1,5 @@
 //
-//  ImagePreviewView.swift
+//  PhotoPreviewView.swift
 //  MenuReader
 //
 //  Created by Humphrey Yeung on 6/10/25.
@@ -8,7 +8,7 @@
 import SwiftUI
 import UIKit
 
-struct ImagePreviewView: View {
+struct PhotoPreviewView: View {
     let image: UIImage
     let onConfirm: () -> Void
     let onRetake: () -> Void
@@ -373,7 +373,7 @@ struct SimpleMenuItemRow: View {
 }
 
 #Preview {
-    ImagePreviewView(
+    PhotoPreviewView(
         image: UIImage(systemName: "photo") ?? UIImage(),
         onConfirm: { },
         onRetake: { }

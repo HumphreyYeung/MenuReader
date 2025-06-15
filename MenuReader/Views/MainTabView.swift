@@ -29,7 +29,10 @@ struct MainTabView: View {
                 .tag(1)
             
             // Demo Tab - Task005图片检索演示
-            DishImageDemoView()
+            // DishImageDemoView已整合到DishDisplayComponents中
+            Text("图片演示")
+                .font(.title2)
+                .foregroundColor(.secondary)
                 .tabItem {
                     Image(systemName: "photo.on.rectangle.angled")
                     Text("图片检索")
