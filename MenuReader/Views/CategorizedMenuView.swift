@@ -258,39 +258,69 @@ struct CategorySection: View {
     let dishImages: [String: [DishImage]]
     let onAddToCart: (MenuItemAnalysis) -> Void
     
+    @State private var isExpanded = true
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 分类标题
-            HStack {
-                Text(category)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Spacer()
-                
-                Text("\(items.count)道菜")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(8)
-            }
-            
-            // 菜品卡片
-            LazyVStack(spacing: 12) {
-                ForEach(items) { item in
-                    DishCardView(
-                        menuItem: item,
-                        dishImages: dishImages[item.originalName] ?? [],
-                        onAddToCart: {
-                            onAddToCart(item)
-                        },
-                        onTapCard: {
-                            // 可以添加卡片点击处理逻辑
-                        }
-                    )
+        VStack(alignment: .leading, spacing: 0) {
+            // 可点击的分类标题
+            Button(action: {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
                 }
+            }) {
+                HStack(spacing: 12) {
+                    // 展开/收起图标
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                    
+                    // 分类名称
+                    Text(category)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    // 菜品数量标签
+                    Text("\(items.count)道菜")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(12)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            // 菜品卡片（可折叠）
+            if isExpanded {
+                LazyVStack(spacing: 12) {
+                    ForEach(items) { item in
+                        UnifiedDishCard(
+                            menuItem: item,
+                            dishImages: dishImages[item.originalName] ?? [],
+                            showCartButton: true,
+                            onAddToCart: {
+                                onAddToCart(item)
+                            },
+                            onTapCard: {
+                                // 可以添加卡片点击处理逻辑
+                            }
+                        )
+                    }
+                }
+                .padding(.top, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

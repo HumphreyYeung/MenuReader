@@ -34,7 +34,7 @@ struct PhotoPreviewView: View {
                         Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: geometry.size.width - 40)
+                            .frame(maxWidth: max(geometry.size.width - 40, 100))
                             .cornerRadius(12)
                         
                         Spacer()
@@ -299,17 +299,26 @@ struct SimpleResultView: View {
                         }
                         .padding(.horizontal, 20)
                         
-                        // 识别的菜单项
+                        // 分类菜品列表
                         if !result.menuItems.isEmpty {
+                            let categorizedItems = Dictionary(grouping: result.menuItems) { item in
+                                item.category ?? "其他"
+                            }
+                            
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("识别到的菜品:")
                                     .font(.headline)
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 20)
                                 
-                                LazyVStack(spacing: 8) {
-                                    ForEach(result.menuItems, id: \.originalName) { item in
-                                        SimpleMenuItemRow(item: item)
+                                LazyVStack(spacing: 16) {
+                                    ForEach(categorizedItems.keys.sorted(), id: \.self) { category in
+                                        if let items = categorizedItems[category], !items.isEmpty {
+                                            SimplePhotoPreviewCategorySection(
+                                                category: category,
+                                                items: items
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -339,35 +348,69 @@ struct SimpleResultView: View {
     }
 }
 
-// MARK: - Simple Menu Item Row
-struct SimpleMenuItemRow: View {
-    let item: MenuItemAnalysis
+// MARK: - Photo Preview Category Section
+
+struct SimplePhotoPreviewCategorySection: View {
+    let category: String
+    let items: [MenuItemAnalysis]
+    
+    @State private var isExpanded = true
     
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.originalName)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                
-                if let translatedName = item.translatedName {
-                    Text(translatedName)
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+        VStack(alignment: .leading, spacing: 0) {
+            // 可点击的分类标题
+            Button(action: {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
                 }
+            }) {
+                HStack(spacing: 12) {
+                    // 展开/收起图标
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                    
+                    // 分类名称
+                    Text(category)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    // 菜品数量标签
+                    Text("\(items.count)道菜")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.2))
+                        .cornerRadius(6)
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(8)
             }
+            .buttonStyle(PlainButtonStyle())
             
-            Spacer()
-            
-            if let price = item.price {
-                Text(price)
-                    .font(.headline)
-                    .foregroundColor(.green)
+            // 菜品卡片（可折叠）
+            if isExpanded {
+                LazyVStack(spacing: 8) {
+                    ForEach(items, id: \.id) { item in
+                        UnifiedDishCard(
+                            menuItem: item,
+                            dishImages: [] // PhotoPreviewView 默认没有搜索图片
+                        )
+                    }
+                }
+                .padding(.top, 8)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding()
-        .background(Color.gray.opacity(0.2))
-        .cornerRadius(8)
         .padding(.horizontal, 20)
     }
 }

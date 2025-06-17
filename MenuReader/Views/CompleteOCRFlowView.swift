@@ -224,7 +224,11 @@ struct CompleteOCRFlowView: View {
             } else {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(result.menuItems, id: \.id) { item in
-                        simpleMenuItemRow(item)
+                        // 使用统一的卡片组件，确保所有菜品都显示图片区域
+                        UnifiedDishCard(
+                            menuItem: item,
+                            dishImages: [] // 简单OCR模式默认没有搜索图片
+                        )
                     }
                 }
             }
@@ -281,27 +285,6 @@ struct CompleteOCRFlowView: View {
                 .buttonStyle(.bordered)
             }
         }
-    }
-    
-    private func simpleMenuItemRow(_ item: MenuItemAnalysis) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(item.originalName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Spacer()
-                if let price = item.price {
-                    Text(price)
-                        .font(.subheadline)
-                        .foregroundColor(.green)
-                }
-            }
-            
-            Text(item.translatedName ?? "")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding(.vertical, 2)
     }
     
     // MARK: - Progress Indicator
@@ -576,12 +559,19 @@ struct CompleteOCRFlowView: View {
                 }
                 .padding(.top, 20)
                 
-                // 菜品列表
+                // 分类菜品列表
                 if let result = analysisResult {
-                    LazyVStack(spacing: 16) {
-                        ForEach(result.items, id: \.id) { item in
-                            let itemImages = dishImages[item.originalName] ?? []
-                            SimplifiedDishCard(menuItem: item, dishImages: itemImages)
+                    let categorizedItems = groupItemsByCategory(result.items)
+                    
+                    LazyVStack(spacing: 20) {
+                        ForEach(categorizedItems.keys.sorted(), id: \.self) { category in
+                            if let items = categorizedItems[category], !items.isEmpty {
+                                SimpleCategorySection(
+                                    category: category,
+                                    items: items,
+                                    dishImages: dishImages
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -658,12 +648,18 @@ struct CompleteOCRFlowView: View {
     
     // MARK: - Helper Methods
     
+    private func groupItemsByCategory(_ items: [MenuItemAnalysis]) -> [String: [MenuItemAnalysis]] {
+        return Dictionary(grouping: items) { item in
+            item.category ?? "其他"
+        }
+    }
+    
     private func processImage(_ image: UIImage) {
         Task {
             do {
                 currentStep = .processing
                 
-                let (result, images) = try await menuAnalysisService.analyzeMenuWithDishImages(image)
+                                    let (result, images) = try await menuAnalysisService.analyzeMenu(image)
                 
                 await MainActor.run {
                     analysisResult = result
@@ -696,6 +692,72 @@ struct CompleteOCRFlowView: View {
 }
 
 // MARK: - Supporting Views
+
+struct SimpleCategorySection: View {
+    let category: String
+    let items: [MenuItemAnalysis]
+    let dishImages: [String: [DishImage]]
+    
+    @State private var isExpanded = true
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 可点击的分类标题
+            Button(action: {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 12) {
+                    // 展开/收起图标
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                    
+                    // 分类名称
+                    Text(category)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    // 菜品数量标签
+                    Text("\(items.count)道菜")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            // 菜品卡片（可折叠）
+            if isExpanded {
+                LazyVStack(spacing: 12) {
+                    ForEach(items, id: \.id) { item in
+                        let itemImages = dishImages[item.originalName] ?? []
+                        UnifiedDishCard(
+                            menuItem: item, 
+                            dishImages: itemImages
+                        )
+                    }
+                }
+                .padding(.top, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
 
 struct ProcessingStepRow: View {
     let icon: String
@@ -733,201 +795,6 @@ struct ProcessingStepRow: View {
         .padding(.vertical, 8)
     }
 }
-
-struct SimplifiedDishCard: View {
-    let menuItem: MenuItemAnalysis
-    let dishImages: [DishImage]
-    
-    @State private var selectedImageIndex = 0
-    @State private var isExpanded = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 菜品图片
-            dishImageSection
-            
-            // 菜品信息
-            dishInfoSection
-            
-            // 展开的详细信息
-            if isExpanded && !dishImages.isEmpty {
-                expandedImageSection
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .padding(16)
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-        .onTapGesture {
-            if !dishImages.isEmpty {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
-                }
-            }
-        }
-    }
-    
-    private var dishImageSection: some View {
-        ZStack {
-            // 背景占位符
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.2))
-                .frame(height: 160)
-                .overlay {
-                    if dishImages.isEmpty {
-                        VStack {
-                            Image(systemName: "photo")
-                                .font(.title2)
-                                .foregroundColor(.gray)
-                            Text("暂无图片")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-            
-            // 实际图片
-            if !dishImages.isEmpty {
-                TabView(selection: $selectedImageIndex) {
-                    ForEach(Array(dishImages.enumerated()), id: \.offset) { index, dishImage in
-                        AsyncImage(url: URL(string: dishImage.imageURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            ProgressView()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                        .frame(height: 160)
-                        .clipped()
-                        .cornerRadius(12)
-                        .tag(index)
-                    }
-                }
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
-                .frame(height: 160)
-            }
-            
-            // 置信度标签
-            VStack {
-                HStack {
-                    Spacer()
-                    Text("\\(Int(menuItem.confidence * 100))%")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .foregroundColor(.primary)
-                }
-                Spacer()
-            }
-            .padding(8)
-        }
-    }
-    
-    private var dishInfoSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 菜品名称
-            VStack(alignment: .leading, spacing: 4) {
-                Text(menuItem.originalName)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .lineLimit(2)
-                
-                if let translatedName = menuItem.translatedName {
-                    Text(translatedName)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-            }
-            
-            // 价格和分类
-            HStack {
-                if let price = menuItem.price {
-                    Text(price)
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.green)
-                }
-                
-                Spacer()
-                
-                if let category = menuItem.category {
-                    Text(category)
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.2))
-                        .foregroundColor(.blue)
-                        .cornerRadius(8)
-                }
-                
-                if !dishImages.isEmpty {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            isExpanded.toggle()
-                        }
-                    }) {
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                    }
-                }
-            }
-            
-            // 描述
-            if let description = menuItem.description, !description.isEmpty {
-                Text(description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-        }
-    }
-    
-    private var expandedImageSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Divider()
-            
-            Text("参考图片 (\\(dishImages.count)张)")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Array(dishImages.enumerated()), id: \.offset) { index, dishImage in
-                        AsyncImage(url: URL(string: dishImage.thumbnailURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            ProgressView()
-                                .frame(width: 60, height: 60)
-                        }
-                        .frame(width: 60, height: 60)
-                        .clipped()
-                        .cornerRadius(8)
-                        .onTapGesture {
-                            selectedImageIndex = index
-                        }
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(selectedImageIndex == index ? Color.blue : Color.clear, lineWidth: 2)
-                        )
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-        }
-    }
-}
-
-// MARK: - OCRFlowStep Extension
-
-// CaseIterable已在enum声明中自动实现
 
 // MARK: - ImagePicker (整合自OCRProcessingView)
 

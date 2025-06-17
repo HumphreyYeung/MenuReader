@@ -7,17 +7,67 @@
 
 import SwiftUI
 
-// MARK: - 统一的菜品显示组件
+// MARK: - 图片加载错误类型
+enum ImageLoadError: Equatable {
+    case networkError
+    case serviceCallFailed
+    case serviceNotCalled
+    case urlInvalid
+    case unknownError(String)
+    
+    var displayText: String {
+        switch self {
+        case .networkError:
+            return "网络错误"
+        case .serviceCallFailed:
+            return "加载失败"
+        case .serviceNotCalled:
+            return "暂无图片"
+        case .urlInvalid:
+            return "图片无效"
+        case .unknownError:
+            return "加载失败"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .networkError:
+            return "wifi.exclamationmark"
+        case .serviceCallFailed:
+            return "exclamationmark.triangle"
+        case .serviceNotCalled:
+            return "photo"
+        case .urlInvalid:
+            return "link.badge.plus"
+        case .unknownError:
+            return "questionmark.circle"
+        }
+    }
+}
 
-/// 菜品卡片视图 - 整合了原DishCardView功能
-struct DishCardView: View {
+// MARK: - 统一菜品卡片组件
+struct UnifiedDishCard: View {
     let menuItem: MenuItemAnalysis
     let dishImages: [DishImage]
-    let onAddToCart: () -> Void
-    let onTapCard: () -> Void
+    let showCartButton: Bool
+    let onAddToCart: (() -> Void)?
+    let onTapCard: (() -> Void)?
     
     @State private var isExpanded = false
     @State private var selectedImageIndex = 0
+    
+    init(menuItem: MenuItemAnalysis, 
+         dishImages: [DishImage], 
+         showCartButton: Bool = false,
+         onAddToCart: (() -> Void)? = nil,
+         onTapCard: (() -> Void)? = nil) {
+        self.menuItem = menuItem
+        self.dishImages = dishImages
+        self.showCartButton = showCartButton
+        self.onAddToCart = onAddToCart
+        self.onTapCard = onTapCard
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -34,45 +84,32 @@ struct DishCardView: View {
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
         .onTapGesture {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                isExpanded.toggle()
-            }
-            onTapCard()
+            handleCardTap()
         }
     }
     
     // MARK: - Main Content
     
     private var mainContentView: some View {
-        VStack(spacing: 12) {
-            // 菜品图片
-            DishImageCarouselView(
+        HStack(spacing: 16) {
+            // 正方形图片区域
+            DishSquareImageView(
                 dishImages: dishImages,
-                selectedIndex: $selectedImageIndex,
-                height: 160
+                menuItem: menuItem
             )
-            .overlay(alignment: .topTrailing) {
-                confidenceBadge
-                    .padding(8)
+            
+            // 菜品信息区域
+            VStack(alignment: .leading, spacing: 8) {
+                dishInfoView
+                
+                // 操作按钮区域（只在需要购物车按钮时显示）
+                if showCartButton {
+                    actionButtonsView
+                }
             }
-            
-            // 菜品信息
-            dishInfoView
-            
-            // 操作按钮
-            actionButtonsView
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
-    }
-    
-    private var confidenceBadge: some View {
-        Text("\(Int(menuItem.confidence * 100))%")
-            .font(.caption2)
-            .fontWeight(.medium)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.ultraThinMaterial, in: Capsule())
-            .foregroundColor(.primary)
     }
     
     private var dishInfoView: some View {
@@ -94,7 +131,7 @@ struct DishCardView: View {
                 }
             }
             
-            // 价格和分类
+            // 价格区域
             HStack {
                 if let price = menuItem.price {
                     Text(price)
@@ -104,16 +141,6 @@ struct DishCardView: View {
                 }
                 
                 Spacer()
-                
-                if let category = menuItem.category {
-                    Text(category)
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.2))
-                        .foregroundColor(.blue)
-                        .cornerRadius(8)
-                }
             }
             
             // 描述
@@ -124,8 +151,19 @@ struct DishCardView: View {
                     .lineLimit(isExpanded ? nil : 2)
                     .multilineTextAlignment(.leading)
             }
+            
+            // 置信度显示
+            HStack {
+                Text("识别准确度: \(Int(menuItem.confidence * 100))%")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+            }
         }
     }
+    
+    // MARK: - Action Buttons
     
     private var actionButtonsView: some View {
         HStack(spacing: 12) {
@@ -151,7 +189,9 @@ struct DishCardView: View {
             Spacer()
             
             // 添加到购物车按钮
-            Button(action: onAddToCart) {
+            Button(action: {
+                onAddToCart?()
+            }) {
                 HStack(spacing: 6) {
                     Image(systemName: "cart.badge.plus")
                         .font(.caption)
@@ -172,13 +212,9 @@ struct DishCardView: View {
         VStack(alignment: .leading, spacing: 12) {
             Divider()
             
-            // 图片网格（如果有多张图片）
-            if dishImages.count > 1 {
-                DishImageGridView(
-                    dishImages: dishImages,
-                    columns: 3,
-                    imageSize: CGSize(width: 80, height: 80)
-                )
+            // 图片展示区域
+            if !dishImages.isEmpty {
+                imageExpandedSection
             }
             
             // 详细信息
@@ -197,6 +233,265 @@ struct DishCardView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
+    }
+    
+    private var imageExpandedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("参考图片 (\(dishImages.count)张)")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            
+            if dishImages.count == 1 {
+                // 单张图片大图显示
+                AsyncImage(url: URL(string: dishImages[0].imageURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 200)
+                        .cornerRadius(12)
+                } placeholder: {
+                    ProgressView()
+                        .frame(height: 200)
+                }
+            } else {
+                // 多张图片横向滚动
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(dishImages.enumerated()), id: \.offset) { index, dishImage in
+                            AsyncImage(url: URL(string: dishImage.thumbnailURL)) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                ProgressView()
+                                    .frame(width: 80, height: 80)
+                            }
+                            .frame(width: 80, height: 80)
+                            .clipped()
+                            .cornerRadius(8)
+                            .onTapGesture {
+                                selectedImageIndex = index
+                            }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(selectedImageIndex == index ? Color.blue : Color.clear, lineWidth: 2)
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func handleCardTap() {
+        onTapCard?()
+    }
+}
+
+// MARK: - 正方形菜品图片视图组件
+struct DishSquareImageView: View {
+    let dishImages: [DishImage]
+    let menuItem: MenuItemAnalysis
+    let size: CGFloat = 80 // 正方形边长
+    
+    @StateObject private var googleSearchService = GoogleSearchService.shared
+    @State private var currentImageIndex = 0
+    @State private var imageError: ImageLoadError?
+    
+    var body: some View {
+        ZStack {
+            // 背景正方形
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.gray.opacity(0.1))
+                .frame(width: size, height: size)
+            
+            // 内容区域
+            contentView
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            checkImageStatus()
+        }
+    }
+    
+    @ViewBuilder
+    private var contentView: some View {
+        let loadingState = googleSearchService.getLoadingState(for: menuItem)
+        
+        switch loadingState {
+        case .idle:
+            idleStateView
+            
+        case .loading:
+            loadingStateView
+            
+        case .loaded(let images):
+            if images.isEmpty {
+                errorStateView(error: .serviceCallFailed)
+            } else {
+                successStateView(images: images)
+            }
+            
+        case .failed(let error):
+            errorStateView(error: parseError(error))
+        }
+    }
+    
+    // MARK: - State Views
+    
+    private var idleStateView: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "photo")
+                .font(.title2)
+                .foregroundColor(.gray)
+            
+            Text("暂无图片")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(8)
+    }
+    
+    private var loadingStateView: some View {
+        VStack(spacing: 8) {
+            ProgressView()
+                .scaleEffect(0.8)
+            
+            Text("加载中")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    private func successStateView(images: [DishImage]) -> some View {
+        ZStack {
+            if !images.isEmpty {
+                // 显示图片轮播
+                TabView(selection: $currentImageIndex) {
+                    ForEach(Array(images.enumerated()), id: \.offset) { index, image in
+                        AsyncImage(url: URL(string: image.thumbnailURL)) { imagePhase in
+                            switch imagePhase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: size, height: size)
+                                    .clipped()
+                                    .cornerRadius(12)
+                                    .tag(index)
+                                
+                            case .failure(_):
+                                errorStateView(error: .urlInvalid)
+                                    .tag(index)
+                                
+                            case .empty:
+                                loadingStateView
+                                    .tag(index)
+                                    
+                            @unknown default:
+                                EmptyView()
+                                    .tag(index)
+                            }
+                        }
+                    }
+                }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: images.count > 1 ? .automatic : .never))
+                .frame(width: size, height: size)
+                
+                // 图片数量指示器（右上角）
+                if images.count > 1 {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text("\(currentImageIndex + 1)/\(images.count)")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .foregroundColor(.primary)
+                        }
+                        Spacer()
+                    }
+                    .padding(6)
+                }
+            }
+        }
+    }
+    
+    private func errorStateView(error: ImageLoadError) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: error.iconName)
+                .font(.title2)
+                .foregroundColor(.red)
+            
+            Text(error.displayText)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+        }
+        .padding(8)
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func checkImageStatus() {
+        let loadingState = googleSearchService.getLoadingState(for: menuItem)
+        if case .idle = loadingState {
+            // 如果状态是idle，说明还没有调用过服务
+            imageError = .serviceNotCalled
+        }
+    }
+    
+    private func parseError(_ error: Error) -> ImageLoadError {
+        let errorMessage = error.localizedDescription.lowercased()
+        
+        if errorMessage.contains("network") || errorMessage.contains("连接") {
+            return .networkError
+        } else if errorMessage.contains("service") || errorMessage.contains("服务") {
+            return .serviceCallFailed
+        } else if errorMessage.contains("url") || errorMessage.contains("链接") {
+            return .urlInvalid
+        } else {
+            return .unknownError(error.localizedDescription)
+        }
+    }
+}
+
+// MARK: - 兼容性别名
+typealias DishCardView = UnifiedDishCard
+
+// MARK: - 图片网格视图（保留原有功能）
+struct DishImageGridView: View {
+    let dishImages: [DishImage]
+    let columns: Int
+    let imageSize: CGSize
+    
+    private var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8), count: columns)
+    }
+    
+    var body: some View {
+        LazyVGrid(columns: gridColumns, spacing: 8) {
+            ForEach(Array(dishImages.enumerated()), id: \.offset) { index, dishImage in
+                AsyncImage(url: URL(string: dishImage.thumbnailURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    ProgressView()
+                        .frame(width: imageSize.width, height: imageSize.height)
+                }
+                .frame(width: imageSize.width, height: imageSize.height)
+                .clipped()
+                .cornerRadius(8)
+            }
+        }
     }
 }
 
@@ -340,52 +635,6 @@ struct DishImageView: View {
         }
         .frame(width: size.width == .infinity ? nil : size.width, 
                height: size.height)
-    }
-}
-
-/// 菜品图片网格视图
-struct DishImageGridView: View {
-    let dishImages: [DishImage]
-    let columns: Int
-    let spacing: CGFloat
-    let imageSize: CGSize
-    
-    @State private var selectedImage: DishImage?
-    @State private var showImageDetail = false
-    
-    init(dishImages: [DishImage],
-         columns: Int = 3,
-         spacing: CGFloat = 8,
-         imageSize: CGSize = CGSize(width: 100, height: 100)) {
-        self.dishImages = dishImages
-        self.columns = columns
-        self.spacing = spacing
-        self.imageSize = imageSize
-    }
-    
-    var body: some View {
-        LazyVGrid(columns: gridColumns, spacing: spacing) {
-            ForEach(dishImages) { dishImage in
-                DishImageView(
-                    dishImage: dishImage,
-                    size: imageSize,
-                    cornerRadius: 8
-                )
-                .onTapGesture {
-                    selectedImage = dishImage
-                    showImageDetail = true
-                }
-            }
-        }
-        .sheet(isPresented: $showImageDetail) {
-            if let selectedImage = selectedImage {
-                DishImageDetailView(dishImage: selectedImage)
-            }
-        }
-    }
-    
-    private var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: spacing), count: columns)
     }
 }
 
