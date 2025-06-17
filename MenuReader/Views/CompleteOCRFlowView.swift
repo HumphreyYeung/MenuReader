@@ -659,7 +659,7 @@ struct CompleteOCRFlowView: View {
             do {
                 currentStep = .processing
                 
-                                    let (result, images) = try await menuAnalysisService.analyzeMenu(image)
+                                    let (result, images) = try await menuAnalysisService.analyzeMenuWithDishImages(image)
                 
                 await MainActor.run {
                     analysisResult = result
@@ -753,7 +753,7 @@ struct SimpleCategorySection: View {
                     }
                 }
                 .padding(.top, 12)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.opacity)
             }
         }
     }

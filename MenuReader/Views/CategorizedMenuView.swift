@@ -320,7 +320,7 @@ struct CategorySection: View {
                     }
                 }
                 .padding(.top, 12)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.opacity)
             }
         }
     }

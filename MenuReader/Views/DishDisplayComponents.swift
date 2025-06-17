@@ -77,7 +77,7 @@ struct UnifiedDishCard: View {
             // 展开的详细信息
             if isExpanded {
                 expandedContentView
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .cardTransition()
             }
         }
         .background(Color(.systemBackground))

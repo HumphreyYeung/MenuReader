@@ -408,7 +408,7 @@ struct SimplePhotoPreviewCategorySection: View {
                     }
                 }
                 .padding(.top, 8)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.opacity)
             }
         }
         .padding(.horizontal, 20)
