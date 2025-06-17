@@ -249,48 +249,7 @@ struct OCRError: Codable, Sendable {
     let message: String
 }
 
-// MARK: - Mock Data
-
-extension OCRProcessingResult {
-    static let mockSuccess = OCRProcessingResult(
-        requestId: UUID().uuidString,
-        success: true,
-        confidence: 0.92,
-        processingTime: 2.3,
-        detectedLanguage: "zh",
-        menuItems: [
-            MenuItemAnalysis(
-                originalName: "宫保鸡丁",
-                translatedName: "Kung Pao Chicken",
-                description: "经典川菜，鸡肉配花生米",
-                price: "¥28",
-                confidence: 0.95,
-                category: "主菜",
-                imageSearchQuery: "kung pao chicken"
-            ),
-            MenuItemAnalysis(
-                originalName: "麻婆豆腐",
-                translatedName: "Mapo Tofu",
-                description: "四川传统豆腐菜",
-                price: "¥18",
-                confidence: 0.88,
-                category: "主菜",
-                imageSearchQuery: "mapo tofu"
-            ),
-            MenuItemAnalysis(
-                originalName: "红烧肉",
-                translatedName: "Braised Pork Belly",
-                description: "传统红烧肉，肥瘦相间",
-                price: "¥32",
-                confidence: 0.88,
-                category: "主菜",
-                imageSearchQuery: "braised pork belly"
-            )
-        ],
-        rawText: "宫保鸡丁 - ¥28\n麻婆豆腐 - ¥18\n红烧肉 - ¥32",
-        error: nil
-    )
-}
+// MARK: - Mock Data (Removed for clean implementation)
 
 // MARK: - OCR API Response Models
 

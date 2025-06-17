@@ -13,7 +13,6 @@ struct CompleteOCRFlowView: View {
     @StateObject private var menuAnalysisService = MenuAnalysisService.shared
     @StateObject private var googleSearchService = GoogleSearchService.shared
     @StateObject private var cameraManager = CameraManager()
-    @StateObject private var processingManager = OCRProcessingManager.shared
     
     @State private var currentStep: OCRFlowStep = .camera
     @State private var selectedImage: UIImage?
@@ -21,9 +20,9 @@ struct CompleteOCRFlowView: View {
     @State private var dishImages: [String: [DishImage]] = [:]
     @State private var errorMessage: String?
     @State private var showingImagePicker = false
+    @State private var useCamera = false
     @State private var isLoadingImages = false
     @State private var imageLoadingProgress: Double = 0.0
-    @State private var isSimpleMode = false // 新增：简化模式开关
     
     enum OCRFlowStep: CaseIterable {
         case camera
@@ -36,95 +35,44 @@ struct CompleteOCRFlowView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // 模式切换器
-                modeToggleView
-                
-                if isSimpleMode {
-                    // 简化OCR模式（整合自OCRProcessingView）
-                    simpleOCRModeView
-                } else {
-                    // 完整流程模式
-                    completeFlowModeView
+                // 完整流程模式
+                completeFlowModeView
+            }
+            .navigationTitle("菜单识别")
+        .navigationBarTitleDisplayMode(.large)
+        .onAppear {
+            print("🔧 [CompleteOCRFlowView] 检查环境配置:")
+            EnvironmentLoader.shared.printConfiguration()
+            
+            // 检查 GoogleSearchService 是否能正常工作
+            print("🔧 [CompleteOCRFlowView] 测试 GoogleSearchService:")
+            Task {
+                do {
+                    let testResult = try await googleSearchService.testConnection()
+                    print("✅ GoogleSearchService 连接测试: \(testResult ? "成功" : "失败")")
+                } catch {
+                    print("❌ GoogleSearchService 连接测试失败: \(error)")
                 }
             }
-            .navigationTitle(isSimpleMode ? "OCR 菜单识别" : "菜单识别")
-            .navigationBarTitleDisplayMode(.large)
+        }
         }
         .sheet(isPresented: $showingImagePicker) {
-            ImagePicker(selectedImage: Binding(
-                get: { selectedImage },
-                set: { newImage in
-                    selectedImage = newImage
-                    if let image = newImage {
-                        if isSimpleMode {
-                            Task {
-                                await processingManager.startMockProcessing(image: image)
-                            }
-                        } else {
+            ImagePicker(
+                selectedImage: Binding(
+                    get: { selectedImage },
+                    set: { newImage in
+                        selectedImage = newImage
+                        if let image = newImage {
                             processImage(image)
                         }
                     }
-                }
-            ))
+                ),
+                useCamera: useCamera
+            )
         }
     }
     
-    // MARK: - Mode Toggle
-    
-    private var modeToggleView: some View {
-        HStack {
-            Text("模式：")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            Picker("模式", selection: $isSimpleMode) {
-                Text("完整流程").tag(false)
-                Text("简单OCR").tag(true)
-            }
-            .pickerStyle(SegmentedPickerStyle())
-            
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color(.systemGray6))
-    }
-    
-    // MARK: - Simple OCR Mode (整合自OCRProcessingView)
-    
-    private var simpleOCRModeView: some View {
-        VStack(spacing: 20) {
-            // 标题区域
-            VStack(spacing: 8) {
-                Text("上传菜单图片，自动识别并翻译")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.top)
-            
-            // 图片显示区域
-            if let image = processingManager.currentImage {
-                simpleImageDisplaySection(image)
-            } else {
-                simpleImagePlaceholderSection
-            }
-            
-            // 处理进度区域
-            if processingManager.isProcessing {
-                simpleProcessingProgressSection
-            } else if let result = processingManager.ocrResult {
-                simpleResultsSection(result)
-            } else if let error = processingManager.errorMessage {
-                simpleErrorSection(error)
-            }
-            
-            Spacer()
-            
-            // 操作按钮
-            simpleActionButtonsSection
-        }
-        .padding()
-    }
+
     
     // MARK: - Complete Flow Mode
     
@@ -149,143 +97,7 @@ struct CompleteOCRFlowView: View {
         }
     }
     
-    // MARK: - Simple Mode Components (整合自OCRProcessingView)
-    
-    private func simpleImageDisplaySection(_ image: UIImage) -> some View {
-        VStack(spacing: 12) {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxHeight: 200)
-                .cornerRadius(12)
-                .shadow(radius: 4)
-            
-            Button("选择其他图片") {
-                showingImagePicker = true
-            }
-            .font(.caption)
-            .foregroundColor(.blue)
-        }
-    }
-    
-    private var simpleImagePlaceholderSection: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "photo.on.rectangle")
-                .font(.system(size: 60))
-                .foregroundColor(.gray)
-            
-            Text("选择菜单图片开始识别")
-                .font(.headline)
-                .foregroundColor(.secondary)
-            
-            Button("选择图片") {
-                showingImagePicker = true
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .frame(height: 200)
-        .frame(maxWidth: .infinity)
-        .background(Color.gray.opacity(0.1))
-        .cornerRadius(12)
-    }
-    
-    private var simpleProcessingProgressSection: some View {
-        VStack(spacing: 16) {
-            Text(processingManager.currentStatus.displayName)
-                .font(.headline)
-            
-            ProgressView(value: processingManager.progress)
-                .progressViewStyle(LinearProgressViewStyle())
-            
-            Text("\\(Int(processingManager.progress * 100))%")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding()
-        .background(Color.blue.opacity(0.1))
-        .cornerRadius(12)
-    }
-    
-    private func simpleResultsSection(_ result: OCRProcessingResult) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("识别结果")
-                    .font(.headline)
-                Spacer()
-                Text("置信度: \\(Int(result.confidence * 100))%")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            if result.menuItems.isEmpty {
-                Text("未识别到菜单项")
-                    .foregroundColor(.secondary)
-                    .italic()
-            } else {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(result.menuItems, id: \.id) { item in
-                        // 使用统一的卡片组件，确保所有菜品都显示图片区域
-                        UnifiedDishCard(
-                            menuItem: item,
-                            dishImages: [] // 简单OCR模式默认没有搜索图片
-                        )
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color.green.opacity(0.1))
-        .cornerRadius(12)
-    }
-    
-    private func simpleErrorSection(_ error: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 40))
-                .foregroundColor(.red)
-            
-            Text("处理失败")
-                .font(.headline)
-                .foregroundColor(.red)
-            
-            Text(error)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
-        .background(Color.red.opacity(0.1))
-        .cornerRadius(12)
-    }
-    
-    private var simpleActionButtonsSection: some View {
-        HStack(spacing: 16) {
-            if processingManager.isProcessing {
-                Button("取消") {
-                    Task {
-                        await processingManager.cancelProcessing()
-                    }
-                }
-                .buttonStyle(.bordered)
-            } else {
-                if processingManager.errorMessage != nil {
-                    Button("重试") {
-                        Task {
-                            if let image = processingManager.currentImage {
-                                await processingManager.startMockProcessing(image: image)
-                            }
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                
-                Button("选择新图片") {
-                    showingImagePicker = true
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-    }
+
     
     // MARK: - Progress Indicator
     
@@ -387,10 +199,8 @@ struct CompleteOCRFlowView: View {
             // 操作按钮
             VStack(spacing: 16) {
                 Button(action: {
-                    // 使用相机拍照
-                    if cameraManager.isCameraAvailable {
-                        showingImagePicker = true
-                    }
+                    useCamera = true
+                    showingImagePicker = true
                 }) {
                     HStack {
                         Image(systemName: "camera")
@@ -405,6 +215,7 @@ struct CompleteOCRFlowView: View {
                 .disabled(!cameraManager.isCameraAvailable)
                 
                 Button(action: {
+                    useCamera = false
                     showingImagePicker = true
                 }) {
                     HStack {
@@ -655,19 +466,36 @@ struct CompleteOCRFlowView: View {
     }
     
     private func processImage(_ image: UIImage) {
+        print("🎯 [CompleteOCRFlowView] processImage 开始执行")
         Task {
             do {
+                print("📝 [CompleteOCRFlowView] 设置当前步骤为 processing")
                 currentStep = .processing
                 
-                                    let (result, images) = try await menuAnalysisService.analyzeMenuWithDishImages(image)
+                print("📞 [CompleteOCRFlowView] 调用 menuAnalysisService.analyzeMenuWithDishImages")
+                let (result, images) = try await menuAnalysisService.analyzeMenuWithDishImages(image)
+                
+                print("✅ [CompleteOCRFlowView] 分析完成！")
+                print("📊 [CompleteOCRFlowView] 识别到菜品数量: \(result.items.count)")
+                print("🖼️ [CompleteOCRFlowView] 图片字典内容:")
+                for (name, imageList) in images {
+                    print("   - \(name): \(imageList.count) 张图片")
+                }
+                
+                // 检查 GoogleSearchService 的状态
+                print("🔍 [CompleteOCRFlowView] 检查 GoogleSearchService 状态:")
+                googleSearchService.printAllStates()
                 
                 await MainActor.run {
+                    print("🔄 [CompleteOCRFlowView] 更新UI状态")
                     analysisResult = result
                     dishImages = images
                     currentStep = .results
+                    print("✅ [CompleteOCRFlowView] UI状态更新完成")
                 }
                 
             } catch {
+                print("❌ [CompleteOCRFlowView] 处理图片失败: \(error)")
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     currentStep = .error
@@ -800,12 +628,13 @@ struct ProcessingStepRow: View {
 
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
+    let useCamera: Bool
     @Environment(\.presentationMode) var presentationMode
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
+        picker.sourceType = useCamera ? .camera : .photoLibrary
         return picker
     }
     

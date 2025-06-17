@@ -320,6 +320,7 @@ struct DishSquareImageView: View {
     @ViewBuilder
     private var contentView: some View {
         let loadingState = googleSearchService.getLoadingState(for: menuItem)
+        let _ = print("🎨 [DishSquareImageView] 渲染菜品: \(menuItem.originalName), 传入图片: \(dishImages.count)张, 服务状态: 查询中")
         
         switch loadingState {
         case .idle:

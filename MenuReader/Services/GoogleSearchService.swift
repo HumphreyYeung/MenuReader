@@ -17,7 +17,7 @@ final class GoogleSearchService: ObservableObject {
     
     // MARK: - Published Properties
     
-    /// 图片加载状态
+    /// 图片加载状态 - 作为唯一真实来源
     @Published private(set) var loadingStates: [String: ImageLoadingState] = [:]
     
     // MARK: - Private Properties
@@ -30,19 +30,38 @@ final class GoogleSearchService: ObservableObject {
         self.apiClient = NetworkService.shared
     }
     
-    // MARK: - Public Methods - 菜品图片获取（整合自ImageService）
+    // MARK: - Public State Management Methods
     
-    /// 获取菜品图片（主要方法）
+    /// 公共方法：更新菜品的图片加载状态
+    func updateState(for menuItemName: String, to state: ImageLoadingState) {
+        print("🔄 [GoogleSearchService] 更新状态: \(menuItemName) -> \(stateDescription(state))")
+        loadingStates[menuItemName] = state
+    }
+    
+    /// 公共方法：获取菜品的图片加载状态
+    func getLoadingState(for menuItem: MenuItemAnalysis) -> ImageLoadingState {
+        // 修复：统一使用 originalName 作为键，确保一致性
+        let cacheKey = menuItem.originalName
+        let state = loadingStates[cacheKey] ?? .idle
+        print("📊 [GoogleSearchService] 查询状态: \(menuItem.originalName) -> \(stateDescription(state))")
+        return state
+    }
+    
+    /// 清理所有状态
+    func clearStates() {
+        loadingStates.removeAll()
+        print("🧹 [GoogleSearchService] 清理所有状态")
+    }
+    
+    // MARK: - Public Methods - 菜品图片获取
+    
+    /// 获取菜品图片（核心方法）- 现在专注于数据获取，状态管理由调用方负责
     func getDishImages(for menuItem: MenuItemAnalysis, count: Int = 3) async throws -> [DishImage] {
-        let cacheKey = generateCacheKey(for: menuItem)
         let searchQuery = menuItem.imageSearchQuery ?? menuItem.translatedName ?? menuItem.originalName
         
-        print("🖼️ GoogleSearchService.getDishImages - 开始获取图片")
+        print("🖼️ [GoogleSearchService.getDishImages] 开始获取图片")
         print("📝 菜品名称: \(menuItem.originalName)")
         print("🔍 搜索查询: \(searchQuery)")
-        
-        // 更新加载状态
-        loadingStates[cacheKey] = .loading
         
         do {
             // 从API获取图片
@@ -55,27 +74,35 @@ final class GoogleSearchService: ObservableObject {
             
             print("✅ 转换为 \(dishImages.count) 个 DishImage 对象")
             
-            // 更新状态
-            loadingStates[cacheKey] = .loaded(dishImages)
-            
             return dishImages
             
         } catch {
             print("❌ GoogleSearchService.getDishImages 失败: \(error)")
-            loadingStates[cacheKey] = .failed(error)
             throw ImageServiceError.loadingFailed(error.localizedDescription)
         }
     }
     
-    /// 获取加载状态
-    func getLoadingState(for menuItem: MenuItemAnalysis) -> ImageLoadingState {
-        let cacheKey = generateCacheKey(for: menuItem)
-        return loadingStates[cacheKey] ?? .idle
-    }
-    
-    /// 清理状态
-    func clearStates() {
-        loadingStates.removeAll()
+    /// 获取菜品图片（带状态管理）- 兼容现有代码的方法
+    func getDishImagesWithStateManagement(for menuItem: MenuItemAnalysis, count: Int = 3) async throws -> [DishImage] {
+        let menuItemName = menuItem.originalName
+        
+        // 更新状态为加载中
+        updateState(for: menuItemName, to: .loading)
+        
+        do {
+            // 获取图片数据
+            let dishImages = try await getDishImages(for: menuItem, count: count)
+            
+            // 更新状态为加载完成
+            updateState(for: menuItemName, to: .loaded(dishImages))
+            
+            return dishImages
+            
+        } catch {
+            // 更新状态为失败
+            updateState(for: menuItemName, to: .failed(error))
+            throw error
+        }
     }
     
     // MARK: - Public Methods - 图片搜索
@@ -116,10 +143,33 @@ final class GoogleSearchService: ObservableObject {
         return !testResults.isEmpty
     }
     
+    // MARK: - Debug & Testing Methods
+    
+    /// 调试方法：打印当前所有状态
+    func printAllStates() {
+        print("🔍 [GoogleSearchService] 当前所有状态:")
+        if loadingStates.isEmpty {
+            print("   - 无状态记录")
+        } else {
+            for (key, state) in loadingStates {
+                print("   - \(key): \(stateDescription(state))")
+            }
+        }
+    }
+    
+    /// 调试方法：检查指定菜品的状态
+    func debugState(for menuItemName: String) {
+        let state = loadingStates[menuItemName] ?? .idle
+        print("🔍 [GoogleSearchService] \(menuItemName) 状态: \(stateDescription(state))")
+    }
+    
+
+    
     // MARK: - Private Methods
     
     private func generateCacheKey(for menuItem: MenuItemAnalysis) -> String {
-        let name = menuItem.translatedName ?? menuItem.originalName
+        // 修复：统一使用 originalName 确保一致性
+        let name = menuItem.originalName
         return "dish_images_\(name.hash)"
     }
     
@@ -159,6 +209,20 @@ final class GoogleSearchService: ObservableObject {
                 height: imageInfo.height
             )
         } ?? []
+    }
+    
+    /// 状态描述方法，用于调试
+    private func stateDescription(_ state: ImageLoadingState) -> String {
+        switch state {
+        case .idle:
+            return "空闲"
+        case .loading:
+            return "加载中"
+        case .loaded(let images):
+            return "已加载(\(images.count)张图片)"
+        case .failed(let error):
+            return "失败(\(error.localizedDescription))"
+        }
     }
 }
 

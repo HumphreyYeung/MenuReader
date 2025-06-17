@@ -511,45 +511,8 @@ struct CartItemRow: View {
 // MARK: - Preview
 
 #Preview {
-    let sampleResult = MenuAnalysisResult(
-        items: [
-            MenuItemAnalysis(
-                originalName: "宫保鸡丁",
-                translatedName: "Kung Pao Chicken",
-                description: "经典川菜，鸡肉配花生米",
-                price: "¥28",
-                confidence: 0.95,
-                category: "主菜"
-            ),
-            MenuItemAnalysis(
-                originalName: "麻婆豆腐",
-                translatedName: "Mapo Tofu",
-                description: "四川传统豆腐菜",
-                price: "¥18",
-                confidence: 0.88,
-                category: "主菜"
-            ),
-            MenuItemAnalysis(
-                originalName: "酸辣汤",
-                translatedName: "Hot and Sour Soup",
-                description: "开胃汤品",
-                price: "¥12",
-                confidence: 0.92,
-                category: "汤品"
-            )
-        ]
-    )
-    
-    let sampleImages: [String: [DishImage]] = [
-        "宫保鸡丁": [
-            DishImage(
-                title: "Kung Pao Chicken",
-                imageURL: "https://example.com/kungpao.jpg",
-                thumbnailURL: "https://example.com/kungpao_thumb.jpg",
-                menuItemName: "宫保鸡丁"
-            )
-        ]
-    ]
+    let sampleResult = MenuAnalysisResult(items: [])
+    let sampleImages: [String: [DishImage]] = [:]
     
     return CategorizedMenuView(
         analysisResult: sampleResult,
