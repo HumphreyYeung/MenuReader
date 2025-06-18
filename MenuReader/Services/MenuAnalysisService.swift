@@ -104,9 +104,9 @@ class MenuAnalysisService: ObservableObject {
             
             // Stage 5: 图片搜索
             await updateStage(.imageSearch)
-            // 批量获取菜品图片（限制数量避免API限制）
+            // 批量获取菜品图片（处理所有识别的菜品）
             var searchResults: [String: [ImageSearchResult]] = [:]
-            let limitedItems = Array(analysisResult.items.prefix(5))
+            let limitedItems = analysisResult.items
             
             for menuItem in limitedItems {
                 do {
@@ -194,8 +194,8 @@ class MenuAnalysisService: ObservableObject {
             
             // 批量获取菜品图片并同步状态到GoogleSearchService
             var dishImages: [String: [DishImage]] = [:]
-            let limitedItems = Array(analysisResult.items.prefix(5))
-            print("🔢 [MenuAnalysisService] 限制处理菜品数量: \(limitedItems.count)")
+            let limitedItems = analysisResult.items  // 处理所有识别到的菜品
+            print("🔢 [MenuAnalysisService] 处理所有菜品数量: \(limitedItems.count)")
             
             for (index, menuItem) in limitedItems.enumerated() {
                 let menuItemName = menuItem.originalName
@@ -216,20 +216,35 @@ class MenuAnalysisService: ObservableObject {
                     print("🌐 [MenuAnalysisService] 调用 getDishImages...")
                     let images = try await googleSearchService.getDishImages(for: menuItem, count: 2)
                     print("📸 [MenuAnalysisService] 获取图片成功: \(images.count) 张")
-                    dishImages[menuItemName] = images
                     
-                    // 3. 更新状态为加载完成
+                    // 3. 检查是否需要生成图片（搜索成功但无结果）
+                    var finalImages = images
+                    if images.isEmpty {
+                        print("🎨 [MenuAnalysisService] 搜索无结果，尝试生成图片: \(menuItemName)")
+                        do {
+                            let generatedImage = try await geminiService.generateDishImage(for: menuItem)
+                            finalImages = [generatedImage]
+                            print("✅ [MenuAnalysisService] 图片生成成功: \(menuItemName)")
+                        } catch {
+                            print("❌ [MenuAnalysisService] 图片生成失败: \(menuItemName) - \(error)")
+                            // 生成失败时保持空数组，不影响主流程
+                        }
+                    }
+                    
+                    dishImages[menuItemName] = finalImages
+                    
+                    // 4. 更新状态为加载完成
                     print("📤 [MenuAnalysisService] 更新状态为已加载: \(menuItemName)")
-                    googleSearchService.updateState(for: menuItemName, to: .loaded(images))
+                    googleSearchService.updateState(for: menuItemName, to: .loaded(finalImages))
                     
-                    print("  ✅ \(menuItemName): \(images.count) 张图片，状态已同步")
+                    print("  ✅ \(menuItemName): \(finalImages.count) 张图片，状态已同步")
                     
                 } catch {
                     print("  ❌ \(menuItemName) 图片获取失败: \(error)")
                     print("📤 [MenuAnalysisService] 更新状态为失败: \(menuItemName)")
                     dishImages[menuItemName] = []
                     
-                    // 4. 更新状态为失败
+                    // 更新状态为失败
                     googleSearchService.updateState(for: menuItemName, to: .failed(error))
                 }
                 
@@ -317,8 +332,8 @@ class MenuAnalysisService: ObservableObject {
         
         var dishImages: [String: [DishImage]] = [:]
         
-        // 限制并发数量，避免API限制
-        let limitedItems = Array(menuItems.prefix(8))
+        // 处理所有菜品，不再限制数量
+        let limitedItems = menuItems
         
         for menuItem in limitedItems {
             let menuItemName = menuItem.originalName
@@ -331,12 +346,27 @@ class MenuAnalysisService: ObservableObject {
                 
                 // 2. 获取图片数据
                 let images = try await googleSearchService.getDishImages(for: menuItem, count: imagesPerItem)
-                dishImages[menuItemName] = images
                 
-                // 3. 更新状态为加载完成
-                googleSearchService.updateState(for: menuItemName, to: .loaded(images))
+                // 3. 检查是否需要生成图片（搜索成功但无结果）
+                var finalImages = images
+                if images.isEmpty {
+                    print("🎨 [MenuAnalysisService] 搜索无结果，尝试生成图片: \(menuItemName)")
+                    do {
+                        let generatedImage = try await geminiService.generateDishImage(for: menuItem)
+                        finalImages = [generatedImage]
+                        print("✅ [MenuAnalysisService] 图片生成成功: \(menuItemName)")
+                    } catch {
+                        print("❌ [MenuAnalysisService] 图片生成失败: \(menuItemName) - \(error)")
+                        // 生成失败时保持空数组，不影响主流程
+                    }
+                }
                 
-                print("  ✅ \(menuItemName): 获取到 \(images.count) 张图片，状态已同步")
+                dishImages[menuItemName] = finalImages
+                
+                // 4. 更新状态为加载完成
+                googleSearchService.updateState(for: menuItemName, to: .loaded(finalImages))
+                
+                print("  ✅ \(menuItemName): 获取到 \(finalImages.count) 张图片，状态已同步")
                 
                 // 添加延迟避免API限制
                 try await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
@@ -345,7 +375,7 @@ class MenuAnalysisService: ObservableObject {
                 print("  ❌ \(menuItemName) 图片获取失败: \(error)")
                 dishImages[menuItemName] = []
                 
-                // 4. 更新状态为失败
+                // 更新状态为失败
                 googleSearchService.updateState(for: menuItemName, to: .failed(error))
             }
         }

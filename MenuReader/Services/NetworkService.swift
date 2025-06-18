@@ -279,6 +279,30 @@ extension NetworkService {
             body: body
         )
     }
+    
+    /// 创建Gemini图像生成API endpoint
+    func createGeminiImageGenerationEndpoint<T: Codable>(request: T) -> APIEndpoint {
+        let apiKey = EnvironmentLoader.shared.geminiAPIKey ?? ""
+        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=\(apiKey)")
+        
+        let encoder = JSONEncoder()
+        let body = try? encoder.encode(request)
+        
+        // 添加Bundle ID到请求头，用于API访问限制
+        let headers = [
+            "Content-Type": "application/json",
+            "X-Ios-Bundle-Identifier": "io.github.HumphreyYeung.MenuReader"
+        ]
+        
+        return APIEndpoint(
+            path: "/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent",
+            method: .POST,
+            headers: headers,
+            queryParameters: nil,
+            url: url,
+            body: body
+        )
+    }
 }
 
 // MARK: - Google Search Endpoint

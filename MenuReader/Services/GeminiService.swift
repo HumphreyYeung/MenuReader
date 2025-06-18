@@ -64,13 +64,38 @@ struct GeminiGenerationConfig: Codable {
     let topP: Double?
     let maxOutputTokens: Int?
     let stopSequences: [String]?
+    let responseModalities: [String]?
+    
+    init(temperature: Double? = nil,
+         topK: Int? = nil,
+         topP: Double? = nil,
+         maxOutputTokens: Int? = nil,
+         stopSequences: [String]? = nil,
+         responseModalities: [String]? = nil) {
+        self.temperature = temperature
+        self.topK = topK
+        self.topP = topP
+        self.maxOutputTokens = maxOutputTokens
+        self.stopSequences = stopSequences
+        self.responseModalities = responseModalities
+    }
     
     static let `default` = GeminiGenerationConfig(
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
         maxOutputTokens: 2048,
-        stopSequences: nil
+        stopSequences: nil,
+        responseModalities: nil
+    )
+    
+    static let imageGeneration = GeminiGenerationConfig(
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 1024,
+        stopSequences: nil,
+        responseModalities: ["TEXT", "IMAGE"]
     )
 }
 
@@ -106,6 +131,38 @@ struct GeminiPromptFeedback: Codable {
 struct GeminiSafetyRating: Codable {
     let category: String
     let probability: String
+}
+
+// MARK: - Image Generation Models
+struct GeminiImageGenerationRequest: Codable {
+    let contents: [GeminiContent]
+    let generationConfig: GeminiGenerationConfig?
+    let safetySettings: [GeminiSafetySetting]?
+    
+    init(contents: [GeminiContent], 
+         generationConfig: GeminiGenerationConfig? = nil,
+         safetySettings: [GeminiSafetySetting]? = nil) {
+        self.contents = contents
+        self.generationConfig = generationConfig
+        self.safetySettings = safetySettings
+    }
+}
+
+struct GeminiImageResponse: Codable {
+    let candidates: [GeminiImageCandidate]?
+    
+    var imageData: String? {
+        return candidates?.first?.content?.parts.first(where: { $0.inlineData != nil })?.inlineData?.data
+    }
+    
+    var textDescription: String? {
+        return candidates?.first?.content?.parts.first(where: { $0.text != nil })?.text
+    }
+}
+
+struct GeminiImageCandidate: Codable {
+    let content: GeminiContent?
+    let finishReason: String?
 }
 
 // MARK: - Unified OCR & Menu Analysis Service
@@ -228,6 +285,64 @@ class GeminiService: ObservableObject, @unchecked Sendable {
         return responseText
     }
     
+    // MARK: - Image Generation
+    
+    /// 生成菜品图片（新功能）
+    func generateDishImage(for menuItem: MenuItemAnalysis) async throws -> DishImage {
+        print("🎨 [GeminiService] 开始生成菜品图片: \(menuItem.originalName)")
+        
+        // 检查API密钥
+        guard EnvironmentLoader.shared.geminiAPIKey != nil else {
+            throw GeminiError.apiKeyMissing
+        }
+        
+        let prompt = createDishImagePrompt(for: menuItem)
+        let textPart = GeminiPart(text: prompt)
+        let content = GeminiContent(parts: [textPart])
+        
+        print("🔤 [GeminiService] 图像生成提示词已创建")
+        
+        // 使用图像生成专用配置（包含responseModalities）
+        let request = GeminiImageGenerationRequest(
+            contents: [content],
+            generationConfig: GeminiGenerationConfig.imageGeneration,
+            safetySettings: GeminiSafetySetting.defaultSettings
+        )
+        
+        print("📡 [GeminiService] 发送图像生成请求到 Gemini 2.0 Flash...")
+        
+        do {
+            let endpoint = apiClient.createGeminiImageGenerationEndpoint(request: request)
+            let response: GeminiImageResponse = try await apiClient.request(
+                endpoint,
+                responseType: GeminiImageResponse.self
+            )
+            
+            print("✅ [GeminiService] 收到图像生成响应")
+            
+            guard let imageData = response.imageData, !imageData.isEmpty else {
+                print("❌ [GeminiService] 响应中无图像数据")
+                throw GeminiError.imageGenerationFailed("API响应中未包含图像数据")
+            }
+            
+            print("📸 [GeminiService] 图像数据获取成功，长度: \(imageData.count) 字符")
+            
+            // 将Base64图像数据转换为本地可用的DishImage
+            let dishImage = createDishImageFromGeneratedData(
+                imageData: imageData,
+                menuItem: menuItem,
+                description: response.textDescription
+            )
+            
+            print("✅ [GeminiService] 菜品图片生成完成: \(menuItem.originalName)")
+            return dishImage
+            
+        } catch {
+            print("❌ [GeminiService] 图像生成失败: \(error)")
+            throw GeminiError.imageGenerationFailed(error.localizedDescription)
+        }
+    }
+    
     // MARK: - Service Health
     
     /// 测试连接
@@ -339,6 +454,64 @@ class GeminiService: ObservableObject, @unchecked Sendable {
         let totalConfidence = items.reduce(0.0) { $0 + $1.confidence }
         return totalConfidence / Double(items.count)
     }
+    
+    // MARK: - Image Generation Helper Methods
+    
+    /// 创建菜品图像生成提示词
+    private func createDishImagePrompt(for menuItem: MenuItemAnalysis) -> String {
+        let dishName = menuItem.translatedName ?? menuItem.originalName
+        let description = menuItem.description ?? ""
+        let category = menuItem.category ?? ""
+        
+        return """
+        App Bundle ID: io.github.HumphreyYeung.MenuReader
+        
+        Generate a high-quality, photorealistic image of the dish: \(dishName)
+        
+        Dish Details:
+        - Name: \(dishName)
+        - Original Name: \(menuItem.originalName)
+        \(description.isEmpty ? "" : "- Description: \(description)")
+        \(category.isEmpty ? "" : "- Category: \(category)")
+        
+        Requirements:
+        - Show a close-up view of the dish that highlights its key ingredients and presentation
+        - Use clean, neutral background (white or light colored)
+        - Professional food photography style with good lighting
+        - The dish should look appetizing and fresh
+        - Focus on authentic appearance typical of this cuisine
+        - Avoid any text, labels, or watermarks in the image
+        - High resolution and sharp details
+        - The dish should be the main focal point, taking up most of the frame
+        
+        Style: Professional food photography, clean presentation, appetizing appearance
+        """
+    }
+    
+    /// 从生成的图像数据创建DishImage对象
+    private func createDishImageFromGeneratedData(
+        imageData: String, 
+        menuItem: MenuItemAnalysis, 
+        description: String?
+    ) -> DishImage {
+        // 创建本地数据URL用于图像显示
+        let base64Prefix = "data:image/png;base64,"
+        let dataURL = base64Prefix + imageData
+        
+        let title = description ?? "生成的\(menuItem.translatedName ?? menuItem.originalName)图片"
+        
+        return DishImage(
+            id: UUID(),
+            title: title,
+            imageURL: dataURL, // 使用data URL作为图像源
+            thumbnailURL: dataURL, // 缩略图使用同样的数据
+            sourceURL: "Generated by Gemini 2.0 Flash",
+            width: 1024, // 默认生成尺寸
+            height: 1024,
+            menuItemName: menuItem.originalName,
+            isLoaded: true // 生成的图像视为已加载
+        )
+    }
 }
 
 // MARK: - Supporting Types
@@ -354,6 +527,8 @@ enum GeminiError: LocalizedError {
     case invalidResponse
     case parseError(String)
     case networkError(String)
+    case imageGenerationFailed(String)
+    case apiKeyMissing
     
     var errorDescription: String? {
         switch self {
@@ -365,6 +540,10 @@ enum GeminiError: LocalizedError {
             return "解析错误: \(message)"
         case .networkError(let message):
             return "网络错误: \(message)"
+        case .imageGenerationFailed(let message):
+            return "图片生成失败: \(message)"
+        case .apiKeyMissing:
+            return "缺少Gemini API密钥"
         }
     }
 }
