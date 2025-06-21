@@ -84,7 +84,7 @@ struct GeminiGenerationConfig: Codable {
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
         stopSequences: nil,
         responseModalities: nil
     )
@@ -177,8 +177,300 @@ class GeminiService: ObservableObject, @unchecked Sendable {
     // MARK: - Menu Analysis (Primary Function)
     
     /// 分析菜单图片（主要方法）
+    /// 分析菜单图片（主要方法）- 带智能语言检测
     func analyzeMenuImage(_ image: UIImage) async throws -> MenuAnalysisResult {
-        return try await analyzeMenuImageWithLanguage(image, targetLanguage: .chinese)
+        print("🤖 [GeminiService] 开始智能菜单分析...")
+        
+        // 1. 获取用户目标语言设置
+        let languageService = await LanguageService.shared
+        let userTargetLanguage = await languageService.getUserTargetLanguage()
+        print("🎯 [GeminiService] 用户目标语言: \(userTargetLanguage)")
+        
+        // 2. 获取用户过敏原设置
+        let userAllergens = AllergenManager.shared.getAllergens()
+        if !userAllergens.isEmpty {
+            print("⚠️ [GeminiService] 用户过敏原: \(userAllergens.joined(separator: ", "))")
+        } else {
+            print("✅ [GeminiService] 用户无过敏原设置")
+        }
+        
+        // 3. 首先进行OCR识别，检测菜单语言
+        let ocrResult = try await performInitialOCR(image)
+        let detectedLanguage = await languageService.detectLanguage(from: ocrResult.rawText)
+        print("🔍 [GeminiService] 检测到菜单语言: \(detectedLanguage)")
+        
+        // 4. 判断是否需要翻译
+        let needsTranslation = await languageService.shouldTranslate(
+            detectedLanguage: detectedLanguage, 
+            targetLanguage: userTargetLanguage
+        )
+        
+        if needsTranslation {
+            print("🌍 [GeminiService] 需要翻译：\(detectedLanguage) -> \(userTargetLanguage)")
+            // 进行带翻译的分析
+            return try await analyzeMenuImageWithTranslation(
+                image, 
+                sourceLanguage: detectedLanguage,
+                targetLanguage: userTargetLanguage,
+                userAllergens: userAllergens
+            )
+        } else {
+            print("✅ [GeminiService] 语言一致，无需翻译")
+            // 直接分析，不进行翻译
+            return try await analyzeMenuImageWithoutTranslation(image, language: detectedLanguage, userAllergens: userAllergens)
+        }
+    }
+    
+    /// 执行初始OCR识别（用于语言检测）
+    private func performInitialOCR(_ image: UIImage) async throws -> (rawText: String, confidence: Double) {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw GeminiError.invalidImage
+        }
+        
+        let base64String = imageData.base64EncodedString()
+        let imagePart = GeminiPart(inlineData: GeminiInlineData(mimeType: "image/jpeg", data: base64String))
+        
+        let prompt = """
+        请识别这张图片中的所有文字内容，直接输出原始文字，不要进行翻译或格式化：
+        """
+        
+        let textPart = GeminiPart(text: prompt)
+        let content = GeminiContent(parts: [textPart, imagePart])
+        
+        let request = GeminiRequest(
+            contents: [content],
+            generationConfig: GeminiGenerationConfig.default,
+            safetySettings: GeminiSafetySetting.defaultSettings
+        )
+        
+        let endpoint = apiClient.createGeminiEndpoint(request: request)
+        let response: GeminiResponse = try await apiClient.request(
+            endpoint,
+            responseType: GeminiResponse.self
+        )
+        
+        guard let responseText = response.text, response.isSuccess else {
+            throw GeminiError.invalidResponse
+        }
+        
+        return (rawText: responseText, confidence: 0.9)
+    }
+    
+    /// 带翻译的菜单分析
+    private func analyzeMenuImageWithTranslation(_ image: UIImage, sourceLanguage: String, targetLanguage: String, userAllergens: [String] = []) async throws -> MenuAnalysisResult {
+        let startTime = Date()
+        
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw GeminiError.invalidImage
+        }
+        
+        let base64String = imageData.base64EncodedString()
+        let imagePart = GeminiPart(inlineData: GeminiInlineData(mimeType: "image/jpeg", data: base64String))
+        
+        let prompt = createMenuAnalysisPromptWithTranslation(sourceLanguage: sourceLanguage, targetLanguage: targetLanguage, userAllergens: userAllergens)
+        let textPart = GeminiPart(text: prompt)
+        let content = GeminiContent(parts: [textPart, imagePart])
+        
+        let request = GeminiRequest(
+            contents: [content],
+            generationConfig: GeminiGenerationConfig.default,
+            safetySettings: GeminiSafetySetting.defaultSettings
+        )
+        
+        let endpoint = apiClient.createGeminiEndpoint(request: request)
+        let response: GeminiResponse = try await apiClient.request(
+            endpoint,
+            responseType: GeminiResponse.self
+        )
+        
+        guard let responseText = response.text, response.isSuccess else {
+            throw GeminiError.invalidResponse
+        }
+        
+        let processingTime = Date().timeIntervalSince(startTime)
+        let result = try parseMenuAnalysisResponse(responseText, processingTime: processingTime)
+        return result
+    }
+    
+    /// 不带翻译的菜单分析
+    private func analyzeMenuImageWithoutTranslation(_ image: UIImage, language: String, userAllergens: [String] = []) async throws -> MenuAnalysisResult {
+        let startTime = Date()
+        
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw GeminiError.invalidImage
+        }
+        
+        let base64String = imageData.base64EncodedString()
+        let imagePart = GeminiPart(inlineData: GeminiInlineData(mimeType: "image/jpeg", data: base64String))
+        
+        let prompt = createMenuAnalysisPromptWithoutTranslation(language: language, userAllergens: userAllergens)
+        let textPart = GeminiPart(text: prompt)
+        let content = GeminiContent(parts: [textPart, imagePart])
+        
+        let request = GeminiRequest(
+            contents: [content],
+            generationConfig: GeminiGenerationConfig.default,
+            safetySettings: GeminiSafetySetting.defaultSettings
+        )
+        
+        let endpoint = apiClient.createGeminiEndpoint(request: request)
+        let response: GeminiResponse = try await apiClient.request(
+            endpoint,
+            responseType: GeminiResponse.self
+        )
+        
+        guard let responseText = response.text, response.isSuccess else {
+            throw GeminiError.invalidResponse
+        }
+        
+        let processingTime = Date().timeIntervalSince(startTime)
+        let result = try parseMenuAnalysisResponse(responseText, processingTime: processingTime)
+        return result
+    }
+    
+    /// 创建带翻译的分析提示词
+    private func createMenuAnalysisPromptWithTranslation(sourceLanguage: String, targetLanguage: String, userAllergens: [String] = []) -> String {
+        let sourceLangName = getLanguageName(sourceLanguage)
+        let targetLangName = getLanguageName(targetLanguage)
+        
+        // 基础JSON结构
+        var jsonStructure = """
+        {
+          "items": [
+            {
+              "originalName": "原始菜品名称（\(sourceLangName)）",
+              "translatedName": "翻译为\(targetLangName)的名称",
+              "description": "简要描述（\(targetLangName)）",
+              "price": "价格（如果可见）",
+              "confidence": 0.95,
+              "category": "菜品分类"
+        """
+        
+        // 条件性添加过敏原分析字段
+        if !userAllergens.isEmpty {
+            jsonStructure += """
+            ,
+              "allergens": ["检测到的过敏原（仅限：\(userAllergens.joined(separator: "、"))）"],
+              "hasUserAllergens": false,
+              "isVegetarian": false,
+              "isVegan": false,
+              "spicyLevel": "辣度等级(0-5)"
+            """
+        }
+        
+        jsonStructure += """
+            }
+          ],
+          "confidence": 0.9,
+          "processingTime": 1.5,
+          "detectedLanguage": "\(sourceLanguage)",
+          "translationApplied": true
+        }
+        """
+        
+        var prompt = """
+        请分析这张菜单图片，提取菜品信息并按以下JSON格式返回。菜单原文是\(sourceLangName)，请翻译为\(targetLangName)：
+        \(jsonStructure)
+        
+        请确保：
+        1. originalName保持原文不变
+        2. translatedName提供准确的\(targetLangName)翻译
+        3. description用\(targetLangName)描述菜品特色
+        """
+        
+        // 条件性添加过敏原分析指令
+        if !userAllergens.isEmpty {
+            prompt += """
+            4. 重要：仅分析是否包含用户关心的过敏原：\(userAllergens.joined(separator: "、"))
+            5. allergens字段只包含检测到的用户过敏原，如无则为空数组
+            6. hasUserAllergens设为true如果包含任何用户过敏原
+            7. 如果能判断，标记isVegetarian和isVegan
+            8. spicyLevel标记辣度等级(0-5)
+            """
+        }
+        
+        prompt += "\n\(userAllergens.isEmpty ? "4" : "9"). 只返回有效的JSON格式，不要添加额外文字"
+        
+        return prompt
+    }
+    
+    /// 创建不带翻译的分析提示词
+    private func createMenuAnalysisPromptWithoutTranslation(language: String, userAllergens: [String] = []) -> String {
+        let langName = getLanguageName(language)
+        
+        // 基础JSON结构
+        var jsonStructure = """
+        {
+          "items": [
+            {
+              "originalName": "菜品名称（\(langName)）",
+              "translatedName": "菜品名称（\(langName)）",
+              "description": "简要描述（\(langName)）",
+              "price": "价格（如果可见）",
+              "confidence": 0.95,
+              "category": "菜品分类"
+        """
+        
+        // 条件性添加过敏原分析字段
+        if !userAllergens.isEmpty {
+            jsonStructure += """
+            ,
+              "allergens": ["检测到的过敏原（仅限：\(userAllergens.joined(separator: "、"))）"],
+              "hasUserAllergens": false,
+              "isVegetarian": false,
+              "isVegan": false,
+              "spicyLevel": "辣度等级(0-5)"
+            """
+        }
+        
+        jsonStructure += """
+            }
+          ],
+          "confidence": 0.9,
+          "processingTime": 1.5,
+          "detectedLanguage": "\(language)",
+          "translationApplied": false
+        }
+        """
+        
+        var prompt = """
+        请分析这张菜单图片，提取菜品信息并按以下JSON格式返回。菜单和输出都使用\(langName)：
+        \(jsonStructure)
+        
+        请确保：
+        1. 所有文字都使用\(langName)
+        2. originalName和translatedName相同（因为无需翻译）
+        """
+        
+        // 条件性添加过敏原分析指令
+        if !userAllergens.isEmpty {
+            prompt += """
+            3. 重要：仅分析是否包含用户关心的过敏原：\(userAllergens.joined(separator: "、"))
+            4. allergens字段只包含检测到的用户过敏原，如无则为空数组
+            5. hasUserAllergens设为true如果包含任何用户过敏原
+            6. 如果能判断，标记isVegetarian和isVegan
+            7. spicyLevel标记辣度等级(0-5)
+            """
+        }
+        
+        prompt += "\n\(userAllergens.isEmpty ? "3" : "8"). 只返回有效的JSON格式，不要添加额外文字"
+        
+        return prompt
+    }
+    
+    /// 获取语言的显示名称
+    private func getLanguageName(_ code: String) -> String {
+        switch code.lowercased() {
+        case "zh": return "中文"
+        case "en": return "英文"
+        case "ja": return "日文"
+        case "ko": return "韩文"
+        case "fr": return "法文"
+        case "de": return "德文"
+        case "it": return "意大利文"
+        case "es": return "西班牙文"
+        default: return "未知语言"
+        }
     }
     
     /// 带语言参数的菜单分析
@@ -405,7 +697,12 @@ class GeminiService: ObservableObject, @unchecked Sendable {
                         price: item.price,
                         confidence: item.confidence,
                         category: item.category,
-                        imageSearchQuery: generateImageSearchQuery(for: item)
+                        imageSearchQuery: generateImageSearchQuery(for: item),
+                        allergens: item.allergens,
+                        hasUserAllergens: item.hasUserAllergens,
+                        isVegetarian: item.isVegetarian,
+                        isVegan: item.isVegan,
+                        spicyLevel: item.spicyLevel
                     )
                 }
                 return item
@@ -444,8 +741,8 @@ class GeminiService: ObservableObject, @unchecked Sendable {
     }
     
     private func generateImageSearchQuery(for item: MenuItemAnalysis) -> String {
-        // 优先使用翻译名称，其次使用原始名称
-        let searchTerm = item.translatedName ?? item.originalName
+        // 优化：优先使用原始名称而不是翻译名称
+        let searchTerm = item.originalName
         return "\(searchTerm) dish food"
     }
     

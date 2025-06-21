@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import Combine
+import UIKit
 
 // MARK: - Storage Service Protocol
 protocol StorageServiceProtocol {
@@ -15,11 +17,16 @@ protocol StorageServiceProtocol {
     func loadCartItems() -> [CartItem]
     func clearCart()
     func saveMenuHistory(_ result: MenuProcessResult)
+    func saveMenuHistory(_ result: MenuProcessResult, originalImage: UIImage?)
     func loadMenuHistory() -> [MenuProcessResult]
+    func deleteMenuHistoryItem(withId id: UUID)
+    func toggleFavoriteHistoryItem(withId id: UUID)
+    func getMenuHistoryPaginated(page: Int, pageSize: Int) -> [MenuProcessResult]
+    func getMenuHistoryCount() -> Int
 }
 
 // MARK: - Storage Service Implementation
-class StorageService: StorageServiceProtocol, @unchecked Sendable {
+class StorageService: ObservableObject, StorageServiceProtocol, @unchecked Sendable {
     static let shared = StorageService()
     
     private let userDefaults = UserDefaults.standard
@@ -80,14 +87,28 @@ class StorageService: StorageServiceProtocol, @unchecked Sendable {
     
     // MARK: - Menu History
     func saveMenuHistory(_ result: MenuProcessResult) {
-        var history = loadMenuHistory()
-        history.insert(result, at: 0) // Add to beginning
+        saveMenuHistory(result, originalImage: nil)
+    }
+    
+    func saveMenuHistory(_ result: MenuProcessResult, originalImage: UIImage?) {
+        var updatedResult = result
         
-        // Keep only last 50 items
-        if history.count > 50 {
-            history = Array(history.prefix(50))
+        // Generate thumbnail if original image is provided
+        if let image = originalImage, result.thumbnailData == nil {
+            let thumbnailData = ImageUtils.generateThumbnailData(from: image)
+            updatedResult = MenuProcessResult(
+                items: result.items,
+                scanDate: result.scanDate,
+                isFavorite: result.isFavorite,
+                thumbnailData: thumbnailData,
+                id: result.id
+            )
         }
         
+        var history = loadMenuHistory()
+        history.insert(updatedResult, at: 0) // Add to beginning
+        
+        // Remove 50-item limit as requested - keep all items
         do {
             let data = try encoder.encode(history)
             userDefaults.set(data, forKey: Keys.menuHistory)
@@ -102,5 +123,52 @@ class StorageService: StorageServiceProtocol, @unchecked Sendable {
             return []
         }
         return history
+    }
+    
+    func deleteMenuHistoryItem(withId id: UUID) {
+        var history = loadMenuHistory()
+        history.removeAll { $0.id == id }
+        
+        do {
+            let data = try encoder.encode(history)
+            userDefaults.set(data, forKey: Keys.menuHistory)
+        } catch {
+            print("Failed to delete menu history item: \(error)")
+        }
+    }
+    
+    func toggleFavoriteHistoryItem(withId id: UUID) {
+        var history = loadMenuHistory()
+        
+        if let index = history.firstIndex(where: { $0.id == id }) {
+            let item = history[index]
+            history[index] = MenuProcessResult(
+                items: item.items,
+                scanDate: item.scanDate,
+                isFavorite: !item.isFavorite,
+                thumbnailData: item.thumbnailData,
+                id: item.id
+            )
+        }
+        
+        do {
+            let data = try encoder.encode(history)
+            userDefaults.set(data, forKey: Keys.menuHistory)
+        } catch {
+            print("Failed to toggle favorite menu history item: \(error)")
+        }
+    }
+    
+    func getMenuHistoryPaginated(page: Int, pageSize: Int) -> [MenuProcessResult] {
+        let history = loadMenuHistory()
+        let startIndex = page * pageSize
+        let endIndex = min(startIndex + pageSize, history.count)
+        
+        guard startIndex < history.count else { return [] }
+        return Array(history[startIndex..<endIndex])
+    }
+    
+    func getMenuHistoryCount() -> Int {
+        return loadMenuHistory().count
     }
 } 

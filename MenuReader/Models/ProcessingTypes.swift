@@ -57,9 +57,14 @@ struct MenuItemAnalysis: Codable, Identifiable {
     let confidence: Double
     let category: String?
     let imageSearchQuery: String?
+    let allergens: [String]?       // 检测到的过敏原（仅用户关心的）
+    let hasUserAllergens: Bool     // 是否包含用户过敏原
+    let isVegetarian: Bool?        // 素食标识（可选）
+    let isVegan: Bool?            // 纯素标识（可选）
+    let spicyLevel: String?       // 辣度等级（可选）
     
     enum CodingKeys: String, CodingKey {
-        case originalName, translatedName, description, price, confidence, category, imageSearchQuery
+        case originalName, translatedName, description, price, confidence, category, imageSearchQuery, allergens, hasUserAllergens, isVegetarian, isVegan, spicyLevel
     }
     
     init(originalName: String, 
@@ -68,7 +73,12 @@ struct MenuItemAnalysis: Codable, Identifiable {
          price: String? = nil,
          confidence: Double = 0.95,
          category: String? = nil,
-         imageSearchQuery: String? = nil) {
+         imageSearchQuery: String? = nil,
+         allergens: [String]? = nil,
+         hasUserAllergens: Bool = false,
+         isVegetarian: Bool? = nil,
+         isVegan: Bool? = nil,
+         spicyLevel: String? = nil) {
         self.originalName = originalName
         self.translatedName = translatedName
         self.description = description
@@ -76,6 +86,11 @@ struct MenuItemAnalysis: Codable, Identifiable {
         self.confidence = confidence
         self.category = category
         self.imageSearchQuery = imageSearchQuery
+        self.allergens = allergens
+        self.hasUserAllergens = hasUserAllergens
+        self.isVegetarian = isVegetarian
+        self.isVegan = isVegan
+        self.spicyLevel = spicyLevel
     }
 }
 
@@ -89,11 +104,23 @@ struct GoogleSearchInformation: Codable {
 
 // MARK: - Menu Process Result (for NetworkService compatibility)
 // Note: MenuItem is defined in MenuItem.swift
-struct MenuProcessResult: Codable {
+struct MenuProcessResult: Codable, Identifiable {
+    let id: UUID
     let items: [MenuItemAnalysis]
+    let scanDate: Date
+    let isFavorite: Bool
+    let thumbnailData: Data? // Compressed image data for thumbnail
     
-    init(items: [MenuItemAnalysis]) {
+    enum CodingKeys: String, CodingKey {
+        case id, items, scanDate, isFavorite, thumbnailData
+    }
+    
+    init(items: [MenuItemAnalysis], scanDate: Date = Date(), isFavorite: Bool = false, thumbnailData: Data? = nil, id: UUID = UUID()) {
+        self.id = id
         self.items = items
+        self.scanDate = scanDate
+        self.isFavorite = isFavorite
+        self.thumbnailData = thumbnailData
     }
 }
 

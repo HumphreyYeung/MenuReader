@@ -152,11 +152,78 @@ struct UnifiedDishCard: View {
                     .multilineTextAlignment(.leading)
             }
             
+            // 过敏原警告和标签
+            allergenWarningView
+            
             // 置信度显示
             HStack {
                 Text("识别准确度: \(Int(menuItem.confidence * 100))%")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                
+                Spacer()
+            }
+        }
+    }
+    
+    // MARK: - Allergen Warning View
+    
+    private var allergenWarningView: some View {
+        Group {
+            // 过敏原警告（如果有用户过敏原）
+            if let allergens = menuItem.allergens, !allergens.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                        .font(.caption)
+                    
+                    Text("包含过敏原: \(allergens.joined(separator: ", "))")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .fontWeight(.medium)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(6)
+            }
+            
+            // 素食标签
+            HStack(spacing: 6) {
+                if menuItem.isVegan == true {
+                    Label("纯素", systemImage: "leaf.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(4)
+                } else if menuItem.isVegetarian == true {
+                    Label("素食", systemImage: "leaf")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(4)
+                }
+                
+                // 辣度标签
+                if let spicyLevel = menuItem.spicyLevel, spicyLevel != "0" {
+                    HStack(spacing: 2) {
+                        Image(systemName: "flame.fill")
+                            .foregroundColor(.orange)
+                        Text("辣度 \(spicyLevel)")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(4)
+                }
                 
                 Spacer()
             }

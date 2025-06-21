@@ -149,3 +149,6 @@ buildServer.json
 # Other tools
 .windsurfrules
 .roomodes 
+
+# Backup files
+*.backup

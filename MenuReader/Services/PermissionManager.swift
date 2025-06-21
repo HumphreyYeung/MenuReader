@@ -51,18 +51,27 @@ class PermissionManager: ObservableObject, @unchecked Sendable {
     
     // MARK: - Photo Library Permission
     func requestPhotoLibraryPermission() async -> Bool {
+        print("📸 [PermissionManager] 请求相册权限，当前状态: \(photoLibraryPermissionStatus)")
+        
         switch photoLibraryPermissionStatus {
         case .authorized, .limited:
+            print("✅ [PermissionManager] 相册权限已授权")
             return true
         case .notDetermined:
+            print("🔄 [PermissionManager] 相册权限未确定，发起请求")
             let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+            print("📝 [PermissionManager] 相册权限请求结果: \(status)")
             await MainActor.run {
-                updatePermissionStatuses()
+                photoLibraryPermissionStatus = status
             }
-            return status == .authorized || status == .limited
+            let granted = status == .authorized || status == .limited
+            print(granted ? "✅ [PermissionManager] 相册权限授权成功" : "❌ [PermissionManager] 相册权限授权失败")
+            return granted
         case .denied, .restricted:
+            print("❌ [PermissionManager] 相册权限被拒绝或受限")
             return false
         @unknown default:
+            print("⚠️ [PermissionManager] 相册权限状态未知")
             return false
         }
     }

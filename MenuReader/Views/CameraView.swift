@@ -84,7 +84,7 @@ struct CameraView: View {
                         
                         // 右上角：相机设置
                         Button(action: {
-                            showCameraSettings = true
+                            showProfileView = true
                         }) {
                             Image(systemName: "gearshape.fill")
                                 .font(.system(size: 20))
@@ -202,10 +202,7 @@ struct CameraView: View {
         .onChange(of: cameraManager.capturedImage) { image in
             if let image = image {
                 selectedImage = image
-                // 确保状态同步后再显示预览
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    showImagePreview = true
-                }
+                showImagePreview = true
             }
         }
         .onReceive(orientationNotifier) { _ in
@@ -213,14 +210,13 @@ struct CameraView: View {
         }
         .sheet(isPresented: $showPhotoLibrary) {
             PhotoPickerView(selectedImage: $selectedImage)
-                .onDisappear {
-                    if selectedImage != nil {
-                        // 确保从相册选择后状态同步
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            showImagePreview = true
-                        }
-                    }
-                }
+        }
+        .onChange(of: selectedImage) { image in
+            // 当selectedImage更新时，检查是否需要显示预览
+            if image != nil && !showImagePreview && !showPhotoLibrary {
+                print("📸 [CameraView] 检测到新选择的图片，显示预览")
+                showImagePreview = true
+            }
         }
         .sheet(isPresented: $showHistoryView) {
             NavigationView {
@@ -238,6 +234,20 @@ struct CameraView: View {
         }
         .sheet(isPresented: $showCameraSettings) {
             CameraSettingsView(cameraManager: cameraManager)
+        }
+        .sheet(isPresented: $showProfileView) {
+            NavigationView {
+                ProfileView()
+                    .navigationBarTitleDisplayMode(.inline)
+                    .navigationBarBackButtonHidden(true)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("完成") {
+                                showProfileView = false
+                            }
+                        }
+                    }
+            }
         }
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
@@ -368,23 +378,31 @@ struct CameraView: View {
     // MARK: - Private Methods
     private func setupCamera() {
         Task {
-            print("🎬 开始设置相机")
-            let cameraPermissionGranted = await permissionManager.requestCameraPermission()
+            print("🎬 [CameraView] 开始设置相机和权限")
+            
+            // 同时请求相机和相册权限
+            async let cameraPermissionTask = permissionManager.requestCameraPermission()
+            async let photoPermissionTask = permissionManager.requestPhotoLibraryPermission()
+            
+            let (cameraPermissionGranted, photoPermissionGranted) = await (cameraPermissionTask, photoPermissionTask)
+            
+            print("📱 [CameraView] 相机权限: \(cameraPermissionGranted ? "已获取" : "被拒绝")")
+            print("📸 [CameraView] 相册权限: \(photoPermissionGranted ? "已获取" : "被拒绝")")
             
             if cameraPermissionGranted {
-                print("📱 相机权限已获取，开始配置会话")
+                print("📱 [CameraView] 相机权限已获取，开始配置会话")
                 await cameraManager.configureCameraSession()
                 
                 await MainActor.run {
                     if cameraManager.isConfigured {
-                        print("✅ 相机会话配置完成，启动会话")
+                        print("✅ [CameraView] 相机会话配置完成，启动会话")
                         cameraManager.startSession()
                     } else {
-                        print("❌ 相机会话配置失败")
+                        print("❌ [CameraView] 相机会话配置失败")
                     }
                 }
             } else {
-                print("❌ 相机权限被拒绝")
+                print("❌ [CameraView] 相机权限被拒绝")
                 await MainActor.run {
                     permissionMessage = "需要相机权限才能拍照"
                     showPermissionAlert = true
@@ -403,14 +421,27 @@ struct CameraView: View {
     }
     
     private func openPhotoLibrary() {
-        Task {
-            let photoPermissionGranted = await permissionManager.requestPhotoLibraryPermission()
-            
-            if photoPermissionGranted {
-                showPhotoLibrary = true
-            } else {
-                permissionMessage = "需要照片库访问权限才能选择图片"
-                showPermissionAlert = true
+        print("📸 [CameraView] 尝试打开相册...")
+        
+        // 由于权限已在App启动时获取，直接检查当前状态
+        if permissionManager.photoLibraryPermissionGranted {
+            print("✅ [CameraView] 相册权限已获得，打开相册")
+            showPhotoLibrary = true
+        } else {
+            print("❌ [CameraView] 相册权限未获得，尝试重新请求")
+            Task {
+                let photoPermissionGranted = await permissionManager.requestPhotoLibraryPermission()
+                
+                await MainActor.run {
+                    if photoPermissionGranted {
+                        print("✅ [CameraView] 权限请求成功，打开相册")
+                        showPhotoLibrary = true
+                    } else {
+                        print("❌ [CameraView] 权限请求失败")
+                        permissionMessage = "需要照片库访问权限才能选择图片"
+                        showPermissionAlert = true
+                    }
+                }
             }
         }
     }
@@ -456,6 +487,9 @@ struct CameraView: View {
                 isAnalyzing = false
                 showAnalysisResult = true
                 
+                // 🔥 保存到历史记录
+                saveMenuToHistory(result: result, originalImage: image)
+                
                 // 打印详细结果
                 for item in result.items {
                     print("🍽️ \(item.originalName) -> \(item.translatedName ?? "无翻译")")
@@ -472,6 +506,19 @@ struct CameraView: View {
                 analysisError = "分析失败：\(error.localizedDescription)"
             }
         }
+    }
+    
+    // MARK: - 历史记录保存
+    private func saveMenuToHistory(result: MenuAnalysisResult, originalImage: UIImage) {
+        print("💾 开始保存菜单到历史记录...")
+        
+        // 创建MenuProcessResult
+        let processResult = MenuProcessResult(items: result.items)
+        
+        // 保存到历史记录，包含原始图片用于生成缩略图
+        StorageService.shared.saveMenuHistory(processResult, originalImage: originalImage)
+        
+        print("✅ 菜单已保存到历史记录，包含 \(result.items.count) 个菜品")
     }
     
     private func resetAnalysisState() {

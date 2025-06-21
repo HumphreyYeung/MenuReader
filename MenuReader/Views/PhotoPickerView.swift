@@ -6,67 +6,67 @@
 //
 
 import SwiftUI
-import PhotosUI
+import UIKit
 
 // MARK: - Photo Picker View
 struct PhotoPickerView: View {
     @Binding var selectedImage: UIImage?
     @Environment(\.dismiss) var dismiss
     
-    @State private var selectedItem: PhotosPickerItem?
-    
     var body: some View {
-        NavigationView {
-            VStack {
-                PhotosPicker(
-                    selection: $selectedItem,
-                    matching: .images,
-                    photoLibrary: .shared()
-                ) {
-                    VStack(spacing: 20) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 60))
-                            .foregroundColor(.blue)
-                        
-                        Text("选择照片")
-                            .font(.title2)
-                            .foregroundColor(.primary)
-                        
-                        Text("从相册中选择一张菜单照片")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                    .padding()
+        PhotoLibraryPicker(selectedImage: $selectedImage) {
+            dismiss()
+        }
+    }
+}
+
+// MARK: - Photo Library Picker
+struct PhotoLibraryPicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    let onDismiss: () -> Void
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = false
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: PhotoLibraryPicker
+        
+        init(_ parent: PhotoLibraryPicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            print("📸 [PhotoPickerView] 用户选择了照片")
+            
+            if let image = info[.originalImage] as? UIImage {
+                print("✅ [PhotoPickerView] 照片获取成功")
+                DispatchQueue.main.async {
+                    self.parent.selectedImage = image
+                    self.parent.onDismiss()
                 }
-                
-                Spacer()
-            }
-            .navigationTitle("选择照片")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("取消") {
-                        dismiss()
-                    }
+            } else {
+                print("❌ [PhotoPickerView] 照片获取失败")
+                DispatchQueue.main.async {
+                    self.parent.onDismiss()
                 }
             }
         }
-        .onChange(of: selectedItem) { newItem in
-            Task {
-                if let newItem = newItem {
-                    if let data = try? await newItem.loadTransferable(type: Data.self) {
-                        if let image = UIImage(data: data) {
-                            await MainActor.run {
-                                selectedImage = image
-                                dismiss()
-                            }
-                        }
-                    }
-                }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            print("📸 [PhotoPickerView] 用户取消了照片选择")
+            DispatchQueue.main.async {
+                self.parent.onDismiss()
             }
         }
     }

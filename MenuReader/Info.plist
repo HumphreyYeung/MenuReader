@@ -19,5 +19,9 @@
 	</array>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.HumphreyYeung.MenuReader</string>
+	<key>NSCameraUsageDescription</key>
+	<string>MenuReader需要访问相机来拍摄菜单照片并进行文字识别</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MenuReader需要访问相册来选择菜单照片进行分析</string>
 </dict>
 </plist>

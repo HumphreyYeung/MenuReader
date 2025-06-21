@@ -9,14 +9,30 @@ import Foundation
 
 // MARK: - User Profile Model
 struct UserProfile: Codable {
-    var preferredLanguage: String
-    var allergens: [String]
     var targetLanguage: String
+    var allergens: [String]
     
-    init(preferredLanguage: String = "en", targetLanguage: String = "en", allergens: [String] = []) {
-        self.preferredLanguage = preferredLanguage
-        self.targetLanguage = targetLanguage
+    init(targetLanguage: String? = nil, allergens: [String] = []) {
+        // 默认跟随系统语言设置
+        self.targetLanguage = targetLanguage ?? Self.getSystemLanguage()
         self.allergens = allergens
+    }
+    
+    // 获取系统语言并映射到支持的语言
+    private static func getSystemLanguage() -> String {
+        let systemLanguage = Locale.current.language.languageCode?.identifier ?? "en"
+        
+        // 映射系统语言到支持的语言
+        switch systemLanguage {
+        case "zh": return SupportedLanguage.chinese.rawValue
+        case "ja": return SupportedLanguage.japanese.rawValue
+        case "ko": return SupportedLanguage.korean.rawValue
+        case "fr": return SupportedLanguage.french.rawValue
+        case "de": return SupportedLanguage.german.rawValue
+        case "it": return SupportedLanguage.italian.rawValue
+        case "es": return SupportedLanguage.spanish.rawValue
+        default: return SupportedLanguage.english.rawValue
+        }
     }
 }
 
@@ -41,6 +57,20 @@ enum SupportedLanguage: String, CaseIterable {
         case .german: return "Deutsch"
         case .italian: return "Italiano"
         case .spanish: return "Español"
+        }
+    }
+    
+    // 获取语言的ISO代码用于OCR识别比较
+    var isoCode: String {
+        switch self {
+        case .english: return "en"
+        case .chinese: return "zh"
+        case .japanese: return "ja"
+        case .korean: return "ko"
+        case .french: return "fr"
+        case .german: return "de"
+        case .italian: return "it"
+        case .spanish: return "es"
         }
     }
 }
@@ -70,4 +100,4 @@ enum CommonAllergen: String, CaseIterable {
         case .sesame: return "芝麻"
         }
     }
-} 
+}

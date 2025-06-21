@@ -57,7 +57,8 @@ final class GoogleSearchService: ObservableObject {
     
     /// 获取菜品图片（核心方法）- 现在专注于数据获取，状态管理由调用方负责
     func getDishImages(for menuItem: MenuItemAnalysis, count: Int = 3) async throws -> [DishImage] {
-        let searchQuery = menuItem.imageSearchQuery ?? menuItem.translatedName ?? menuItem.originalName
+        // 优化1：优先使用原始语言名称进行搜索
+        let searchQuery = menuItem.imageSearchQuery ?? menuItem.originalName
         
         print("🖼️ [GoogleSearchService.getDishImages] 开始获取图片")
         print("📝 菜品名称: \(menuItem.originalName)")
@@ -196,6 +197,16 @@ final class GoogleSearchService: ObservableObject {
         return response.items?.compactMap { item in
             guard let imageInfo = item.image,
                   let link = item.link else {
+                return nil
+            }
+            
+            // 优化2：添加图片尺寸过滤，过滤掉太小的图片
+            let width = imageInfo.width ?? 0
+            let height = imageInfo.height ?? 0
+            let minSize = 200 // 最小尺寸限制
+            
+            guard width >= minSize && height >= minSize else {
+                print("🚫 过滤小图片: \(width)x\(height) < \(minSize)")
                 return nil
             }
             

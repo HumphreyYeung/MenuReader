@@ -492,6 +492,9 @@ struct CompleteOCRFlowView: View {
                     dishImages = images
                     currentStep = .results
                     print("✅ [CompleteOCRFlowView] UI状态更新完成")
+                    
+                    // 自动保存到历史记录
+                    saveResults()
                 }
                 
             } catch {
@@ -514,8 +517,16 @@ struct CompleteOCRFlowView: View {
     }
     
     private func saveResults() {
-        // TODO: 实现保存功能
-        print("保存结果功能待实现")
+        guard let result = analysisResult, let image = selectedImage else {
+            print("❌ [CompleteOCRFlowView] 无法保存：缺少分析结果或图片")
+            return
+        }
+        
+        // 创建MenuProcessResult并保存到历史记录
+        let processResult = MenuProcessResult(items: result.items)
+        StorageService.shared.saveMenuHistory(processResult, originalImage: image)
+        
+        print("✅ [CompleteOCRFlowView] 已保存到历史记录")
     }
 }
 
