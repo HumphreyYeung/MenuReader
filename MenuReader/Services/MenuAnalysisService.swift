@@ -416,6 +416,79 @@ class MenuAnalysisService: ObservableObject {
         return resizedImage ?? image
     }
     
+    // MARK: - Error Handling & Recovery
+    
+    @Published var lastError: AppError?
+    @Published var retryAttempts: Int = 0
+    
+    private let maxRetryAttempts = 3
+    private let baseRetryDelay: TimeInterval = 1.0
+    
+    /// 通用错误处理和重试机制
+    private func handleErrorWithRetry<T: Sendable>(
+        operation: @Sendable () async throws -> T,
+        errorContext: String,
+        canRetry: Bool = true
+    ) async throws -> T {
+        var lastError: Error?
+        
+        for attempt in 0..<(canRetry ? maxRetryAttempts : 1) {
+            do {
+                let result = try await operation()
+                // 成功时重置重试计数
+                if attempt > 0 {
+                    await MainActor.run {
+                        retryAttempts = 0
+                    }
+                }
+                return result
+            } catch {
+                lastError = error
+                await MainActor.run {
+                    retryAttempts = attempt + 1
+                }
+                
+                // 记录错误
+                logError(error, context: errorContext, attempt: attempt + 1)
+                
+                // 如果不是最后一次尝试，等待后重试
+                if attempt < maxRetryAttempts - 1 && canRetry {
+                    let delay = baseRetryDelay * pow(2.0, Double(attempt)) // 指数退避
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+        }
+        
+        // 所有重试都失败，抛出包装后的错误
+        let wrappedError = AppError.fromError(lastError!, context: errorContext)
+        await MainActor.run {
+            self.lastError = wrappedError
+        }
+        throw wrappedError
+    }
+    
+    /// 错误日志记录
+    private func logError(_ error: Error, context: String, attempt: Int) {
+        let errorInfo = [
+            "Context": context,
+            "Attempt": "\(attempt)/\(maxRetryAttempts)",
+            "Error": error.localizedDescription,
+            "Type": String(describing: type(of: error)),
+            "Timestamp": ISO8601DateFormatter().string(from: Date())
+        ]
+        
+        print("❌ [MenuAnalysisService] 错误详情: \(errorInfo)")
+        
+        // 在实际应用中，这里可以发送到崩溃报告服务
+        // crashReporter.recordError(error, userInfo: errorInfo)
+    }
+    
+    /// 清除错误状态
+    func clearError() {
+        lastError = nil
+        retryAttempts = 0
+    }
+    
     // MARK: - Error Types
     enum AnalysisError: LocalizedError {
         case alreadyInProgress
@@ -423,19 +496,51 @@ class MenuAnalysisService: ObservableObject {
         case analysisTimeout
         case networkError(Error)
         case invalidResponse
+        case serviceUnavailable
+        case rateLimitExceeded
         
         var errorDescription: String? {
             switch self {
             case .alreadyInProgress:
-                return "分析已在进行中"
+                return "分析已在进行中，请等待当前分析完成"
             case .imageProcessingFailed:
-                return "图片处理失败"
+                return "图片处理失败，请检查图片是否损坏或格式不支持"
             case .analysisTimeout:
-                return "分析超时"
+                return "分析超时，请检查网络连接并重试"
             case .networkError(let error):
-                return "网络错误: \(error.localizedDescription)"
+                return "网络连接失败: \(error.localizedDescription)"
             case .invalidResponse:
-                return "无效的响应数据"
+                return "服务器返回无效数据，请稍后重试"
+            case .serviceUnavailable:
+                return "服务暂时不可用，请稍后重试"
+            case .rateLimitExceeded:
+                return "请求过于频繁，请稍后重试"
+            }
+        }
+        
+        var recoveryOptions: [String] {
+            switch self {
+            case .alreadyInProgress:
+                return ["等待完成"]
+            case .imageProcessingFailed:
+                return ["选择其他图片", "检查图片格式"]
+            case .analysisTimeout, .networkError:
+                return ["检查网络连接", "重试", "使用离线模式"]
+            case .invalidResponse, .serviceUnavailable:
+                return ["重试", "联系客服"]
+            case .rateLimitExceeded:
+                return ["稍后重试", "减少请求频率"]
+            }
+        }
+        
+        var canRetry: Bool {
+            switch self {
+            case .alreadyInProgress:
+                return false
+            case .imageProcessingFailed:
+                return false
+            default:
+                return true
             }
         }
     }

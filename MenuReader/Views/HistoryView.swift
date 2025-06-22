@@ -9,11 +9,13 @@ import SwiftUI
 
 struct HistoryView: View {
     @StateObject private var storageService = StorageService.shared
+    @StateObject private var offlineManager = OfflineManager.shared
     @State private var historyItems: [MenuProcessResult] = []
     @State private var searchText = ""
     @State private var showingFavoritesOnly = false
     @State private var currentPage = 0
     @State private var isLoading = false
+    @State private var showingStorageSettings = false
     
     private let pageSize = 20
     
@@ -81,8 +83,30 @@ struct HistoryView: View {
             }
             .navigationTitle("扫描历史")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button(action: { showingStorageSettings = true }) {
+                            Label("存储管理", systemImage: "externaldrive.badge.questionmark")
+                        }
+                        
+                        if offlineManager.pendingUploadsCount > 0 {
+                            Button(action: { offlineManager.processQueue() }) {
+                                Label("同步待上传数据 (\(offlineManager.pendingUploadsCount))", 
+                                      systemImage: "arrow.up.circle")
+                            }
+                            .disabled(offlineManager.isOfflineMode || offlineManager.isProcessingQueue)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
             .onAppear {
                 loadHistory()
+            }
+            .sheet(isPresented: $showingStorageSettings) {
+                StorageManagementView()
             }
         }
     }

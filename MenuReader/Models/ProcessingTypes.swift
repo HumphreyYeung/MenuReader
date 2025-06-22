@@ -124,6 +124,103 @@ struct MenuProcessResult: Codable, Identifiable {
     }
 }
 
+// MARK: - Error Handling Types
+
+/// 统一的应用错误类型
+struct AppError: LocalizedError, Identifiable {
+    let id = UUID()
+    let type: ErrorType
+    let context: String
+    let underlyingError: Error?
+    let timestamp: Date = Date()
+    
+    enum ErrorType {
+        case network
+        case parsing
+        case validation
+        case service
+        case user
+        case system
+        case unknown
+    }
+    
+    var errorDescription: String? {
+        if let underlyingError = underlyingError {
+            return "\(context): \(underlyingError.localizedDescription)"
+        }
+        return context
+    }
+    
+    var userFriendlyMessage: String {
+        switch type {
+        case .network:
+            return "网络连接出现问题，请检查网络设置"
+        case .parsing:
+            return "数据处理失败，请重试"
+        case .validation:
+            return "输入数据有误，请检查后重试"
+        case .service:
+            return "服务暂时不可用，请稍后重试"
+        case .user:
+            return "操作失败，请重试"
+        case .system:
+            return "系统错误，请重启应用"
+        case .unknown:
+            return "未知错误，请重试"
+        }
+    }
+    
+    var canRetry: Bool {
+        switch type {
+        case .network, .service, .parsing, .unknown:
+            return true
+        case .validation, .user, .system:
+            return false
+        }
+    }
+    
+    var recoveryOptions: [String] {
+        switch type {
+        case .network:
+            return ["检查网络", "重试", "使用离线模式"]
+        case .service:
+            return ["重试", "稍后再试", "联系客服"]
+        case .parsing, .unknown:
+            return ["重试", "重新开始"]
+        case .validation:
+            return ["检查输入", "重新输入"]
+        case .user:
+            return ["重试", "查看帮助"]
+        case .system:
+            return ["重启应用", "联系客服"]
+        }
+    }
+    
+    static func fromError(_ error: Error, context: String) -> AppError {
+        let errorType: ErrorType
+        
+        // 根据错误类型推断分类
+        if error.localizedDescription.contains("network") || 
+           error.localizedDescription.contains("连接") {
+            errorType = .network
+        } else if error.localizedDescription.contains("parse") ||
+                  error.localizedDescription.contains("解析") {
+            errorType = .parsing
+        } else if error.localizedDescription.contains("service") ||
+                  error.localizedDescription.contains("服务") {
+            errorType = .service
+        } else {
+            errorType = .unknown
+        }
+        
+        return AppError(
+            type: errorType,
+            context: context,
+            underlyingError: error
+        )
+    }
+}
+
 // MARK: - 注释：以下类型已移动到GoogleSearchService.swift避免重复定义
 // - ImageSearchResult
 // - GoogleSearchResponse  

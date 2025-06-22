@@ -12,6 +12,7 @@ struct CameraView: View {
     @StateObject private var cameraManager = CameraManager()
     @StateObject private var permissionManager = PermissionManager.shared
     @StateObject private var menuAnalysisService = MenuAnalysisService.shared
+    @StateObject private var offlineManager = OfflineManager.shared
     
     @State private var showPhotoLibrary = false
     @State private var showHistoryView = false
@@ -96,6 +97,15 @@ struct CameraView: View {
                         .padding(.trailing, 20)
                     }
                     .padding(.top, geometry.safeAreaInsets.top + 10)
+                    
+                    // 网络状态指示器
+                    if offlineManager.isOfflineMode || offlineManager.pendingUploadsCount > 0 {
+                        NetworkStatusBanner(offlineManager: offlineManager)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+                            .transition(.opacity)
+                            .animation(.easeInOut(duration: 0.3), value: offlineManager.isOfflineMode)
+                    }
                     
                     Spacer()
                 }
@@ -351,7 +361,33 @@ struct CameraView: View {
                 .transition(.opacity)
             }
         }
-        .alert("分析错误", isPresented: .constant(analysisError != nil)) {
+        .overlay {
+            // 错误处理横幅
+            if let error = analysisError {
+                VStack {
+                    Spacer()
+                    
+                    ErrorBannerView(
+                        error: error,
+                        onRetry: {
+                            if let image = selectedImage {
+                                Task {
+                                    await analyzeMenuWithImages(image)
+                                }
+                            }
+                        },
+                        onDismiss: {
+                            analysisError = nil
+                        }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(), value: analysisError)
+                }
+            }
+        }
+        .alert("分析错误", isPresented: .constant(analysisError != nil && analysisError!.contains("严重"))) {
             Button("确定") {
                 analysisError = nil
             }
@@ -361,6 +397,9 @@ struct CameraView: View {
                         await analyzeMenuWithImages(image)
                     }
                 }
+            }
+            Button("报告问题") {
+                reportIssue(error: analysisError ?? "未知错误")
             }
         } message: {
             Text(analysisError ?? "")
@@ -475,6 +514,13 @@ struct CameraView: View {
         analysisError = nil
         
         do {
+            // 检查网络状态，如果离线则提供友好提示
+            if offlineManager.isOfflineMode {
+                analysisError = "当前处于离线状态，无法进行在线图片搜索。您可以继续拍照，数据将保存在本地，网络恢复后可同步。"
+                isAnalyzing = false
+                return
+            }
+            
             print("📞 调用 menuAnalysisService.analyzeMenuWithDishImages...")
             let (result, images) = try await menuAnalysisService.analyzeMenuWithDishImages(image)
             
@@ -497,15 +543,63 @@ struct CameraView: View {
                         print("   📸 找到 \(itemImages.count) 张图片")
                     }
                 }
+                
+                // 清除任何之前的错误
+                analysisError = nil
             }
             
         } catch {
             await MainActor.run {
                 print("❌ 菜单分析失败: \(error)")
                 isAnalyzing = false
-                analysisError = "分析失败：\(error.localizedDescription)"
+                
+                // 提供用户友好的错误消息
+                let userFriendlyError = getUserFriendlyErrorMessage(from: error)
+                analysisError = userFriendlyError
+                
+                // 记录详细错误用于调试
+                logDetailedError(error, context: "菜单分析")
             }
         }
+    }
+    
+    // MARK: - Error Message Processing
+    
+    private func getUserFriendlyErrorMessage(from error: Error) -> String {
+        let errorDescription = error.localizedDescription.lowercased()
+        
+        if errorDescription.contains("network") || errorDescription.contains("连接") {
+            return "网络连接出现问题，请检查网络设置后重试"
+        } else if errorDescription.contains("timeout") || errorDescription.contains("超时") {
+            return "请求超时，请检查网络连接或稍后重试"
+        } else if errorDescription.contains("unauthorized") || errorDescription.contains("401") {
+            return "服务认证失败，请检查应用配置"
+        } else if errorDescription.contains("rate limit") || errorDescription.contains("429") {
+            return "请求过于频繁，请稍后再试"
+        } else if errorDescription.contains("server") || errorDescription.contains("500") {
+            return "服务器暂时不可用，请稍后重试"
+        } else if errorDescription.contains("parse") || errorDescription.contains("解析") {
+            return "数据处理失败，请重试或选择其他图片"
+        } else {
+            return "分析过程遇到问题，请重试。如果问题持续存在，请联系客服"
+        }
+    }
+    
+    private func logDetailedError(_ error: Error, context: String) {
+        let errorInfo = [
+            "Context": context,
+            "Error": error.localizedDescription,
+            "Type": String(describing: type(of: error)),
+            "Timestamp": ISO8601DateFormatter().string(from: Date()),
+            "Device": UIDevice.current.model,
+            "iOS": UIDevice.current.systemVersion,
+            "Network": offlineManager.isOfflineMode ? "离线" : "在线"
+        ]
+        
+        print("❌ [详细错误记录] \(errorInfo)")
+        
+        // 在生产环境中，这里会发送到崩溃报告服务
+        // crashReporter.recordError(error, userInfo: errorInfo)
     }
     
     // MARK: - 历史记录保存
@@ -515,8 +609,8 @@ struct CameraView: View {
         // 创建MenuProcessResult
         let processResult = MenuProcessResult(items: result.items)
         
-        // 保存到历史记录，包含原始图片用于生成缩略图
-        StorageService.shared.saveMenuHistory(processResult, originalImage: originalImage)
+        // 使用OfflineManager保存，它会根据网络状态决定是否加入队列
+        offlineManager.saveMenuResult(processResult, originalImage: originalImage)
         
         print("✅ 菜单已保存到历史记录，包含 \(result.items.count) 个菜品")
     }
@@ -526,6 +620,29 @@ struct CameraView: View {
         dishImages = [:]
         analysisError = nil
         isAnalyzing = false
+    }
+    
+    // MARK: - Error Handling Methods
+    
+    private func reportIssue(error: String) {
+        // 简化的错误报告功能
+        let errorReport = """
+        应用版本: 1.0.0
+        设备信息: \(UIDevice.current.model)
+        系统版本: \(UIDevice.current.systemVersion)
+        错误时间: \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .medium))
+        错误详情: \(error)
+        """
+        
+        // 在实际应用中，这里会发送到错误报告服务
+        print("📧 [错误报告] \(errorReport)")
+        
+        // 可以集成邮件或第三方错误报告服务
+        if let url = URL(string: "mailto:support@menuReader.com?subject=错误报告&body=\(errorReport.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") {
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url)
+            }
+        }
     }
 }
 
@@ -538,6 +655,151 @@ extension UIDeviceOrientation {
         default:
             return false
         }
+    }
+}
+
+// MARK: - Error Banner Component
+
+struct ErrorBannerView: View {
+    let error: String
+    let onRetry: () -> Void
+    let onDismiss: () -> Void
+    
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("分析遇到问题")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    if !isExpanded {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                    }
+                }
+                
+                Spacer()
+                
+                Button(action: { onDismiss() }) {
+                    Image(systemName: "xmark")
+                        .foregroundColor(.gray)
+                        .font(.caption)
+                }
+            }
+            
+            if isExpanded {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.leading, 8)
+            }
+            
+            HStack(spacing: 12) {
+                Button("重试") {
+                    onRetry()
+                }
+                .font(.caption)
+                .foregroundColor(.blue)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.blue.opacity(0.2))
+                .cornerRadius(8)
+                
+                Button("详情") {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isExpanded.toggle()
+                    }
+                }
+                .font(.caption)
+                .foregroundColor(.orange)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.2))
+                .cornerRadius(8)
+                
+                if error.contains("网络") || error.contains("连接") {
+                    Button("离线模式") {
+                        // 切换到离线模式的处理
+                        onDismiss()
+                    }
+                    .font(.caption)
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.green.opacity(0.2))
+                    .cornerRadius(8)
+                }
+                
+                Spacer()
+            }
+        }
+        .padding(16)
+        .background(Color.black.opacity(0.9))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+        )
+    }
+    
+    private var errorMessage: String {
+        if error.contains("网络") || error.contains("连接") {
+            return "网络连接异常"
+        } else if error.contains("分析") {
+            return "图片分析失败"
+        } else if error.contains("解析") {
+            return "数据处理失败"
+        } else {
+            return "操作失败"
+        }
+    }
+}
+
+// MARK: - Network Status Banner
+struct NetworkStatusBanner: View {
+    @ObservedObject var offlineManager: OfflineManager
+    
+    var body: some View {
+        HStack {
+            Image(systemName: offlineManager.isOfflineMode ? "wifi.slash" : "wifi")
+                .foregroundColor(offlineManager.isOfflineMode ? .red : .blue)
+                .font(.caption)
+            
+            Text(offlineManager.offlineStatusDescription)
+                .font(.caption)
+                .foregroundColor(.white)
+            
+            Spacer()
+            
+            if offlineManager.isProcessingQueue {
+                ProgressView()
+                    .scaleEffect(0.7)
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+            } else if offlineManager.pendingUploadsCount > 0 && !offlineManager.isOfflineMode {
+                Button("同步") {
+                    offlineManager.processQueue()
+                }
+                .font(.caption)
+                .foregroundColor(.blue)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.8))
+                .cornerRadius(4)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.black.opacity(0.7))
+        .cornerRadius(8)
     }
 }
 

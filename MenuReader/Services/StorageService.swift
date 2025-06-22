@@ -23,6 +23,18 @@ protocol StorageServiceProtocol {
     func toggleFavoriteHistoryItem(withId id: UUID)
     func getMenuHistoryPaginated(page: Int, pageSize: Int) -> [MenuProcessResult]
     func getMenuHistoryCount() -> Int
+    
+    // MARK: - Offline Queue Management
+    func addToPendingUploadQueue(_ result: MenuProcessResult)
+    func getPendingUploadQueue() -> [MenuProcessResult]
+    func removePendingUploadItem(withId id: UUID)
+    func clearPendingUploadQueue()
+    
+    // MARK: - Storage Management
+    func getStorageSize() -> Int64
+    func cleanupOldData(keepRecentDays: Int)
+    func getMaxStorageLimit() -> Int64
+    func setMaxStorageLimit(_ limit: Int64)
 }
 
 // MARK: - Storage Service Implementation
@@ -38,6 +50,8 @@ class StorageService: ObservableObject, StorageServiceProtocol, @unchecked Senda
         static let userProfile = "userProfile"
         static let cartItems = "cartItems"
         static let menuHistory = "menuHistory"
+        static let pendingUploadQueue = "pendingUploadQueue"
+        static let maxStorageLimit = "maxStorageLimit"
     }
     
     private init() {
@@ -170,5 +184,118 @@ class StorageService: ObservableObject, StorageServiceProtocol, @unchecked Senda
     
     func getMenuHistoryCount() -> Int {
         return loadMenuHistory().count
+    }
+    
+    // MARK: - Offline Queue Management
+    
+    func addToPendingUploadQueue(_ result: MenuProcessResult) {
+        var queue = getPendingUploadQueue()
+        
+        // 避免重复添加
+        if !queue.contains(where: { $0.id == result.id }) {
+            queue.append(result)
+            
+            do {
+                let data = try encoder.encode(queue)
+                userDefaults.set(data, forKey: Keys.pendingUploadQueue)
+                print("💾 [StorageService] 已添加到待上传队列: \(result.id)")
+            } catch {
+                print("❌ [StorageService] 保存待上传队列失败: \(error)")
+            }
+        }
+    }
+    
+    func getPendingUploadQueue() -> [MenuProcessResult] {
+        guard let data = userDefaults.data(forKey: Keys.pendingUploadQueue),
+              let queue = try? decoder.decode([MenuProcessResult].self, from: data) else {
+            return []
+        }
+        return queue
+    }
+    
+    func removePendingUploadItem(withId id: UUID) {
+        var queue = getPendingUploadQueue()
+        queue.removeAll { $0.id == id }
+        
+        do {
+            let data = try encoder.encode(queue)
+            userDefaults.set(data, forKey: Keys.pendingUploadQueue)
+            print("🗑️ [StorageService] 已从待上传队列移除: \(id)")
+        } catch {
+            print("❌ [StorageService] 更新待上传队列失败: \(error)")
+        }
+    }
+    
+    func clearPendingUploadQueue() {
+        userDefaults.removeObject(forKey: Keys.pendingUploadQueue)
+        print("🧹 [StorageService] 已清空待上传队列")
+    }
+    
+    // MARK: - Storage Management
+    
+    func getStorageSize() -> Int64 {
+        var totalSize: Int64 = 0
+        
+        // 计算菜单历史大小
+        if let data = userDefaults.data(forKey: Keys.menuHistory) {
+            totalSize += Int64(data.count)
+        }
+        
+        // 计算用户配置文件大小
+        if let data = userDefaults.data(forKey: Keys.userProfile) {
+            totalSize += Int64(data.count)
+        }
+        
+        // 计算购物车数据大小
+        if let data = userDefaults.data(forKey: Keys.cartItems) {
+            totalSize += Int64(data.count)
+        }
+        
+        // 计算待上传队列大小
+        if let data = userDefaults.data(forKey: Keys.pendingUploadQueue) {
+            totalSize += Int64(data.count)
+        }
+        
+        return totalSize
+    }
+    
+    func cleanupOldData(keepRecentDays: Int = 30) {
+        let cutoffDate = Date().addingTimeInterval(-TimeInterval(keepRecentDays * 24 * 60 * 60))
+        var history = loadMenuHistory()
+        let originalCount = history.count
+        
+        // 保留最近的数据和收藏的数据
+        history = history.filter { result in
+            result.scanDate > cutoffDate || result.isFavorite
+        }
+        
+        let removedCount = originalCount - history.count
+        
+        if removedCount > 0 {
+            do {
+                let data = try encoder.encode(history)
+                userDefaults.set(data, forKey: Keys.menuHistory)
+                print("🧹 [StorageService] 清理完成，移除了 \(removedCount) 条旧记录")
+            } catch {
+                print("❌ [StorageService] 清理数据失败: \(error)")
+            }
+        }
+    }
+    
+    func getMaxStorageLimit() -> Int64 {
+        let defaultLimit: Int64 = 100 * 1024 * 1024 // 100MB 默认限制
+        return userDefaults.object(forKey: Keys.maxStorageLimit) as? Int64 ?? defaultLimit
+    }
+    
+    func setMaxStorageLimit(_ limit: Int64) {
+        userDefaults.set(limit, forKey: Keys.maxStorageLimit)
+        print("📏 [StorageService] 存储限制已设置为: \(limit / 1024 / 1024)MB")
+        
+        // 检查是否需要立即清理
+        let currentSize = getStorageSize()
+        if currentSize > limit {
+            let targetDays = max(7, Int(Double(limit) / Double(currentSize) * 30))
+            cleanupOldData(keepRecentDays: targetDays)
+        }
     }
 } 
