@@ -62,6 +62,7 @@ struct CategorizedMenuView: View {
                     menuContentView
                 }
             }
+            .background(DesignSystem.Colors.backgroundPrimary)
             .navigationTitle("菜单")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -81,28 +82,30 @@ struct CategorizedMenuView: View {
     // MARK: - Search and Filter Section
     
     private var searchAndFilterSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DesignSystem.Spacing.m) {
             // 搜索栏
             HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
+                Image(systemName: FoodIcons.search)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(DesignSystem.Typography.body)
                 
                 TextField("搜索菜品...", text: $searchText)
                     .textFieldStyle(PlainTextFieldStyle())
+                    .font(DesignSystem.Typography.body)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
                 
                 if !searchText.isEmpty {
                     Button(action: {
                         searchText = ""
                     }) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
+            .padding(.horizontal, DesignSystem.Spacing.m)
+            .padding(.vertical, DesignSystem.Spacing.m)
+            .secondaryCardStyle()
             
             // 分类过滤
             if !allCategories.isEmpty {
@@ -132,15 +135,15 @@ struct CategorizedMenuView: View {
                 }
             }
         }
-        .padding(.vertical, 12)
-        .background(Color(.systemBackground))
+        .padding(.vertical, DesignSystem.Spacing.m)
+        .background(DesignSystem.Colors.backgroundPrimary)
     }
     
     // MARK: - Menu Content
     
     private var menuContentView: some View {
         ScrollView {
-            LazyVStack(spacing: 20) {
+            LazyVStack(spacing: DesignSystem.Spacing.l) {
                 ForEach(categorizedItems.keys.sorted(), id: \.self) { category in
                     if let items = categorizedItems[category], !items.isEmpty {
                         CategorySection(
@@ -154,41 +157,42 @@ struct CategorizedMenuView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, DesignSystem.Spacing.m)
             .padding(.bottom, 100) // 为底部购物车按钮留空间
         }
+        .background(DesignSystem.Colors.backgroundPrimary)
     }
     
     // MARK: - Empty State
     
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "doc.text.magnifyingglass")
+        VStack(spacing: DesignSystem.Spacing.l) {
+            Image(systemName: FoodIcons.search)
                 .font(.system(size: 60))
-                .foregroundColor(.gray)
+                .foregroundColor(DesignSystem.Colors.textTertiary)
             
             Text("没有找到菜品")
-                .font(.title2)
-                .fontWeight(.semibold)
+                .font(DesignSystem.Typography.title2)
+                .foregroundColor(DesignSystem.Colors.textPrimary)
             
             if !searchText.isEmpty {
                 Text("尝试调整搜索条件")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(DesignSystem.Typography.body)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
                 
                 Button("清除搜索") {
                     searchText = ""
                     selectedCategory = nil
                 }
-                .buttonStyle(.bordered)
+                .secondaryButtonStyle()
             } else {
                 Text("菜单识别结果为空")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(DesignSystem.Typography.body)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
+        .background(DesignSystem.Colors.backgroundPrimary)
     }
     
     // MARK: - Cart Button
@@ -198,16 +202,17 @@ struct CategorizedMenuView: View {
             showingCart = true
         }) {
             ZStack {
-                Image(systemName: "cart")
-                    .font(.title3)
+                Image(systemName: FoodIcons.cart)
+                    .font(DesignSystem.Typography.title3)
+                    .foregroundColor(DesignSystem.Colors.primary)
                 
                 if !cartItems.isEmpty {
                     Text("\(cartItems.count)")
-                        .font(.caption2)
+                        .font(DesignSystem.Typography.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                         .frame(width: 16, height: 16)
-                        .background(Color.red)
+                        .background(DesignSystem.Colors.accent)
                         .clipShape(Circle())
                         .offset(x: 8, y: -8)
                 }
@@ -264,41 +269,37 @@ struct CategorySection: View {
         VStack(alignment: .leading, spacing: 0) {
             // 可点击的分类标题
             Button(action: {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                MenuAnimations.performCategoryToggle {
                     isExpanded.toggle()
                 }
             }) {
-                HStack(spacing: 12) {
+                HStack(spacing: DesignSystem.Spacing.m) {
                     // 展开/收起图标
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                         .fontWeight(.medium)
-                        .foregroundColor(.blue)
-                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                        .foregroundColor(DesignSystem.Colors.primary)
+                        .iconAnimation(value: isExpanded)
                     
                     // 分类名称
                     Text(category)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
+                        .font(DesignSystem.Typography.title2)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
                     
                     Spacer()
                     
                     // 菜品数量标签
                     Text("\(items.count)道菜")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
-                        .cornerRadius(12)
+                        .font(DesignSystem.Typography.captionMedium)
+                        .foregroundColor(DesignSystem.Colors.primary)
+                        .padding(.horizontal, DesignSystem.Spacing.m)
+                        .padding(.vertical, DesignSystem.Spacing.xs)
+                        .background(DesignSystem.Colors.primaryVeryLight)
+                        .cornerRadius(DesignSystem.CornerRadius.medium)
                 }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
+                .padding(.vertical, DesignSystem.Spacing.m)
+                .padding(.horizontal, DesignSystem.Spacing.m)
+                .secondaryCardStyle()
             }
             .buttonStyle(PlainButtonStyle())
             
@@ -336,13 +337,16 @@ struct CategoryFilterButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.subheadline)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundColor(isSelected ? .white : .primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(isSelected ? Color.blue : Color(.systemGray6))
-                .cornerRadius(20)
+                .font(DesignSystem.Typography.captionMedium)
+                .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+                .padding(.horizontal, DesignSystem.Spacing.m)
+                .padding(.vertical, DesignSystem.Spacing.s)
+                .background(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.backgroundSecondary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.round)
+                        .stroke(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: 1)
+                )
+                .cornerRadius(DesignSystem.CornerRadius.round)
         }
         .buttonStyle(PlainButtonStyle())
     }

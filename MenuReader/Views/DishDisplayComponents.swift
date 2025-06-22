@@ -77,12 +77,10 @@ struct UnifiedDishCard: View {
             // 展开的详细信息
             if isExpanded {
                 expandedContentView
-                    .cardTransition()
+                    .cardAppearTransition()
             }
         }
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+        .primaryCardStyle()
         .onTapGesture {
             handleCardTap()
         }
@@ -113,41 +111,44 @@ struct UnifiedDishCard: View {
     }
     
     private var dishInfoView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 菜品名称
-            VStack(alignment: .leading, spacing: 4) {
-                Text(menuItem.originalName)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                
-                if let translatedName = menuItem.translatedName {
-                    Text(translatedName)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.s) {
+            // 菜品名称和价格区域
+            HStack {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text(menuItem.originalName)
+                        .font(DesignSystem.Typography.title3)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                }
-            }
-            
-            // 价格区域
-            HStack {
-                if let price = menuItem.price {
-                    Text(price)
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.green)
+                    
+                    if let translatedName = menuItem.translatedName {
+                        Text(translatedName)
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
                 }
                 
                 Spacer()
+                
+                // 价格标签
+                if let price = menuItem.price {
+                    Text(price)
+                        .font(DesignSystem.Typography.captionMedium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, DesignSystem.Spacing.s)
+                        .padding(.vertical, DesignSystem.Spacing.xs)
+                        .background(DesignSystem.Colors.accent)
+                        .cornerRadius(DesignSystem.CornerRadius.small)
+                }
             }
             
             // 描述
             if let description = menuItem.description, !description.isEmpty {
                 Text(description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
                     .lineLimit(isExpanded ? nil : 2)
                     .multilineTextAlignment(.leading)
             }
@@ -158,8 +159,8 @@ struct UnifiedDishCard: View {
             // 置信度显示
             HStack {
                 Text("识别准确度: \(Int(menuItem.confidence * 100))%")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(DesignSystem.Typography.caption2)
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
                 
                 Spacer()
             }
@@ -172,57 +173,57 @@ struct UnifiedDishCard: View {
         Group {
             // 过敏原警告（如果有用户过敏原）
             if let allergens = menuItem.allergens, !allergens.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
-                        .font(.caption)
+                        .foregroundColor(DesignSystem.Colors.error)
+                        .font(DesignSystem.Typography.caption)
                     
                     Text("包含过敏原: \(allergens.joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundColor(.red)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.error)
                         .fontWeight(.medium)
                     
                     Spacer()
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.red.opacity(0.1))
-                .cornerRadius(6)
+                .padding(.horizontal, DesignSystem.Spacing.s)
+                .padding(.vertical, DesignSystem.Spacing.xs)
+                .background(DesignSystem.Colors.error.opacity(0.1))
+                .cornerRadius(DesignSystem.CornerRadius.small)
             }
             
-            // 素食标签
-            HStack(spacing: 6) {
+            // 健康标签
+            HStack(spacing: DesignSystem.Spacing.xs) {
                 if menuItem.isVegan == true {
-                    Label("纯素", systemImage: "leaf.fill")
-                        .font(.caption2)
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 6)
+                    Label("纯素", systemImage: FoodIcons.organic)
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundColor(DesignSystem.Colors.primary)
+                        .padding(.horizontal, DesignSystem.Spacing.xs)
                         .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(4)
+                        .background(DesignSystem.Colors.primaryVeryLight)
+                        .cornerRadius(DesignSystem.CornerRadius.small)
                 } else if menuItem.isVegetarian == true {
-                    Label("素食", systemImage: "leaf")
-                        .font(.caption2)
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 6)
+                    Label("素食", systemImage: FoodIcons.healthy)
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundColor(DesignSystem.Colors.primary)
+                        .padding(.horizontal, DesignSystem.Spacing.xs)
                         .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(4)
+                        .background(DesignSystem.Colors.primaryVeryLight)
+                        .cornerRadius(DesignSystem.CornerRadius.small)
                 }
                 
                 // 辣度标签
                 if let spicyLevel = menuItem.spicyLevel, spicyLevel != "0" {
                     HStack(spacing: 2) {
-                        Image(systemName: "flame.fill")
-                            .foregroundColor(.orange)
+                        Image(systemName: FoodIcons.spicy)
+                            .foregroundColor(DesignSystem.Colors.accent)
                         Text("辣度 \(spicyLevel)")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundColor(DesignSystem.Colors.accent)
                     }
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, DesignSystem.Spacing.xs)
                     .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.1))
-                    .cornerRadius(4)
+                    .background(DesignSystem.Colors.accentSoft)
+                    .cornerRadius(DesignSystem.CornerRadius.small)
                 }
                 
                 Spacer()
@@ -233,44 +234,45 @@ struct UnifiedDishCard: View {
     // MARK: - Action Buttons
     
     private var actionButtonsView: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: DesignSystem.Spacing.m) {
             // 展开/收起按钮
             Button(action: {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                MenuAnimations.performCategoryToggle {
                     isExpanded.toggle()
                 }
             }) {
-                HStack(spacing: 4) {
+                HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     Text(isExpanded ? "收起" : "详情")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                 }
-                .foregroundColor(.blue)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
+                .foregroundColor(DesignSystem.Colors.primary)
+                .padding(.horizontal, DesignSystem.Spacing.m)
+                .padding(.vertical, DesignSystem.Spacing.s)
+                .background(DesignSystem.Colors.primaryVeryLight)
+                .cornerRadius(DesignSystem.CornerRadius.small)
             }
             
             Spacer()
             
             // 添加到购物车按钮
             Button(action: {
-                onAddToCart?()
+                MenuAnimations.performButtonPress {
+                    onAddToCart?()
+                }
             }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "cart.badge.plus")
-                        .font(.caption)
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: FoodIcons.cart)
+                        .font(DesignSystem.Typography.caption)
                     Text("加入购物车")
-                        .font(.caption)
-                        .fontWeight(.medium)
+                        .font(DesignSystem.Typography.captionMedium)
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.green)
-                .cornerRadius(8)
+                .padding(.horizontal, DesignSystem.Spacing.m)
+                .padding(.vertical, DesignSystem.Spacing.s)
+                .background(DesignSystem.Colors.primary)
+                .cornerRadius(DesignSystem.CornerRadius.small)
             }
         }
     }

@@ -83,11 +83,11 @@ struct CameraView: View {
                     HStack {
                         Spacer()
                         
-                        // 右上角：相机设置
+                        // 右上角：用户设置
                         Button(action: {
                             showProfileView = true
                         }) {
-                            Image(systemName: "gearshape.fill")
+                            Image(systemName: "person.circle.fill")
                                 .font(.system(size: 20))
                                 .foregroundColor(.white)
                                 .frame(width: 44, height: 44)
@@ -96,7 +96,7 @@ struct CameraView: View {
                         }
                         .padding(.trailing, 20)
                     }
-                    .padding(.top, geometry.safeAreaInsets.top + 10)
+                    .padding(.top, max(geometry.safeAreaInsets.top - 5, 10))
                     
                     // 网络状态指示器
                     if offlineManager.isOfflineMode || offlineManager.pendingUploadsCount > 0 {
@@ -119,17 +119,15 @@ struct CameraView: View {
                     // 主要控制区域
                     HStack {
                         // 左侧：历史记录按钮
-                        VStack(spacing: 10) {
-                            Button(action: {
-                                showHistoryView = true
-                            }) {
-                                Image(systemName: "clock.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.white)
-                                    .frame(width: 50, height: 40)
-                                    .background(Color.black.opacity(0.4))
-                                    .clipShape(Circle())
-                            }
+                        Button(action: {
+                            showHistoryView = true
+                        }) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white)
+                                .frame(width: 50, height: 50)
+                                .background(Color.black.opacity(0.4))
+                                .clipShape(Circle())
                         }
                         
                         Spacer()
@@ -262,15 +260,7 @@ struct CameraView: View {
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
                 PhotoPreviewView(image: image) {
-                    // 确认处理图像 - 使用MenuAnalysisService with 图片搜索
-                    showImagePreview = false
-                    
-                    // 启动完整的菜单分析（包含图片搜索）
-                    Task {
-                        await analyzeMenuWithImages(image)
-                    }
-                } onRetake: {
-                    // 重新拍照
+                    // 重新拍照或关闭预览
                     showImagePreview = false
                     selectedImage = nil
                     cameraManager.capturedImage = nil

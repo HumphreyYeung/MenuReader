@@ -21,7 +21,7 @@ struct MenuReaderApp: App {
         WindowGroup {
             ZStack {
                 CameraView()
-                    .preferredColorScheme(.dark) // 相机界面通常使用深色主题
+                    .preferredColorScheme(.dark) // 相机界面使用深色主题
                 
                 // Onboarding 覆盖层
                 if showOnboarding {
