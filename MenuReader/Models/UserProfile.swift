@@ -101,3 +101,70 @@ enum CommonAllergen: String, CaseIterable {
         }
     }
 }
+
+// MARK: - Profile View Model
+class ProfileViewModel: ObservableObject {
+    @Published var userProfile: UserProfile
+    @Published var customAllergens: [String] = []
+    @Published var customAllergenInput: String = ""
+    @Published var validationError: String = ""
+    
+    init() {
+        // 从UserDefaults加载用户配置
+        if let data = UserDefaults.standard.data(forKey: "UserProfile"),
+           let profile = try? JSONDecoder().decode(UserProfile.self, from: data) {
+            self.userProfile = profile
+        } else {
+            self.userProfile = UserProfile()
+        }
+        
+        // 分离常见过敏原和自定义过敏原
+        let commonAllergenValues = CommonAllergen.allCases.map { $0.rawValue }
+        self.customAllergens = userProfile.allergens.filter { !commonAllergenValues.contains($0) }
+    }
+    
+    func hasAllergen(_ allergen: String) -> Bool {
+        return userProfile.allergens.contains(allergen)
+    }
+    
+    func toggleCommonAllergen(_ allergen: CommonAllergen) {
+        if hasAllergen(allergen.rawValue) {
+            userProfile.allergens.removeAll { $0 == allergen.rawValue }
+        } else {
+            userProfile.allergens.append(allergen.rawValue)
+        }
+        saveProfile()
+    }
+    
+    func addCustomAllergenFromInput() {
+        let allergen = customAllergenInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if allergen.isEmpty {
+            validationError = "请输入过敏原名称"
+            return
+        }
+        
+        if userProfile.allergens.contains(allergen) {
+            validationError = "该过敏原已存在"
+            return
+        }
+        
+        userProfile.allergens.append(allergen)
+        customAllergens.append(allergen)
+        customAllergenInput = ""
+        validationError = ""
+        saveProfile()
+    }
+    
+    func removeCustomAllergen(_ allergen: String) {
+        userProfile.allergens.removeAll { $0 == allergen }
+        customAllergens.removeAll { $0 == allergen }
+        saveProfile()
+    }
+    
+    func saveProfile() {
+        if let data = try? JSONEncoder().encode(userProfile) {
+            UserDefaults.standard.set(data, forKey: "UserProfile")
+        }
+    }
+}

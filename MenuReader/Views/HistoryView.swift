@@ -37,94 +37,81 @@ struct HistoryView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            AppPageHeader(
-                "扫描历史",
-                showBackButton: true,
-                onBackAction: {
-                    dismiss()
-                },
-                rightButton: AnyView(
-                    Menu {
-                        Button(action: { showingStorageSettings = true }) {
-                            Label("存储管理", systemImage: "externaldrive.badge.questionmark")
-                        }
-                        
-                        if offlineManager.pendingUploadsCount > 0 {
-                            Button(action: { offlineManager.processQueue() }) {
-                                Label("同步待上传数据 (\(offlineManager.pendingUploadsCount))", 
-                                      systemImage: "arrow.up.circle")
-                            }
-                            .disabled(offlineManager.isOfflineMode || offlineManager.isProcessingQueue)
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .foregroundColor(AppColors.accent)
-                            .font(.system(size: AppIcons.mediumSize))
-                    }
-                )
-            )
-            VStack(spacing: 0) {
-                // Search bar and filter
-                VStack {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(AppColors.secondaryText)
-                        TextField("搜索菜品...", text: $searchText)
-                            .foregroundColor(AppColors.primary)
-                    }
-                    .padding(.horizontal, AppSpacing.m)
-                    .padding(.vertical, AppSpacing.xs)
-                    .background(AppColors.lightBackground)
-                    .cornerRadius(AppSpacing.xs)
-                    .padding(.horizontal)
-                    
-                    HStack {
-                        Toggle("只显示收藏", isOn: $showingFavoritesOnly)
-                            .toggleStyle(SwitchToggleStyle())
-                            .accentColor(AppColors.accent)
-                        Spacer()
-                        Text("共 \(filteredItems.count) 条记录")
-                            .font(AppFonts.caption)
-                            .foregroundColor(AppColors.secondaryText)
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
+            
+            // Search bar and filter
+            VStack {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("搜索菜品...", text: $searchText)
                 }
-                .background(AppColors.contentBackground)
-                .shadow(color: AppColors.separator, radius: 1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
+                .padding(.horizontal)
                 
-                // History list
-                if filteredItems.isEmpty {
-                    emptyStateView
-                } else {
-                    List {
-                        ForEach(filteredItems) { item in
-                            HistoryItemRow(
-                                item: item,
-                                onToggleFavorite: { toggleFavorite(item.id) },
-                                onDelete: { deleteItem(item.id) }
-                            )
-                            .listRowInsets(EdgeInsets())
-                        }
+                HStack {
+                    Toggle("只显示收藏", isOn: $showingFavoritesOnly)
+                        .toggleStyle(SwitchToggleStyle())
+                    Spacer()
+                    Text("共 \(filteredItems.count) 条记录")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+            .background(Color(.systemBackground))
+            .shadow(color: .gray.opacity(0.1), radius: 1)
+            
+            // History list
+            if filteredItems.isEmpty {
+                emptyStateView
+            } else {
+                List {
+                    ForEach(filteredItems) { item in
+                        HistoryItemRow(
+                            item: item,
+                            onToggleFavorite: { toggleFavorite(item.id) },
+                            onDelete: { deleteItem(item.id) }
+                        )
+                        .listRowInsets(EdgeInsets())
                     }
-                    .listStyle(PlainListStyle())
-                    .scrollContentBackground(.hidden)
-                    .background(AppColors.background)
+                }
+                .listStyle(PlainListStyle())
+                .scrollContentBackground(.hidden)
+                .background(Color(.systemGroupedBackground))
+            }
+        }
+        .navigationTitle("扫描历史")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: { showingStorageSettings = true }) {
+                        Label("存储管理", systemImage: "externaldrive.badge.questionmark")
+                    }
+                    
+                    if offlineManager.pendingUploadsCount > 0 {
+                        Button(action: { offlineManager.processQueue() }) {
+                            Label("同步待上传数据 (\(offlineManager.pendingUploadsCount))", 
+                                  systemImage: "arrow.up.circle")
+                        }
+                        .disabled(offlineManager.isOfflineMode || offlineManager.isProcessingQueue)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
             }
-            .background(AppColors.background)
-            .onAppear {
-                loadHistory()
-            }
-            .sheet(isPresented: $showingStorageSettings) {
-                StorageManagementView()
-            }
         }
-        .navigationDestination(for: MenuProcessResult.self) { item in
-            HistoryDetailView(item: item)
+        .background(Color(.systemGroupedBackground))
+        .onAppear {
+            loadHistory()
         }
-        .navigationBarHidden(true) // 隐藏系统导航栏，使用自定义AppPageHeader
-        .preferredColorScheme(.light) // 强制使用浅色主题
+        .sheet(isPresented: $showingStorageSettings) {
+            StorageManagementView()
+        }
     }
     
     private var emptyStateView: some View {
@@ -133,17 +120,17 @@ struct HistoryView: View {
             
             Image(systemName: searchText.isEmpty && !showingFavoritesOnly ? "clock.circle" : "magnifyingglass.circle")
                 .font(.system(size: 60))
-                .foregroundColor(AppColors.secondaryText)
+                .foregroundColor(.secondary)
             
             Text(searchText.isEmpty && !showingFavoritesOnly ? "暂无扫描历史" : "未找到相关记录")
-                .font(AppFonts.title1)
-                .foregroundColor(AppColors.primary)
+                .font(.title2)
+                .fontWeight(.medium)
                 .padding(.top)
             
             if searchText.isEmpty && !showingFavoritesOnly {
                 Text("扫描菜单后会显示在这里")
-                    .font(AppFonts.body)
-                    .foregroundColor(AppColors.secondaryText)
+                    .font(.body)
+                    .foregroundColor(.secondary)
                     .padding(.top, 4)
             }
             
@@ -190,150 +177,58 @@ struct HistoryItemRow: View {
     }
     
     var body: some View {
-        NavigationLink(value: item) {
-            HStack(spacing: 12) {
-                // Thumbnail
-                thumbnailImage
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
+        HStack(spacing: 12) {
+            // Thumbnail
+            thumbnailImage
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
+            
+            // Content
+            VStack(alignment: .leading, spacing: 4) {
+                Text(formattedDate)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                 
-                // Content
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(formattedDate)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    Text("\(item.items.count) 个菜品")
+                Text("\(item.items.count) 个菜品")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if let firstItem = item.items.first {
+                    Text(firstItem.translatedName ?? firstItem.originalName)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
-                    if let firstItem = item.items.first {
-                        Text(firstItem.translatedName ?? firstItem.originalName)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                
-                Spacer()
-                
-                // Actions
-                VStack {
-                    Button(action: onToggleFavorite) {
-                        Image(systemName: item.isFavorite ? "heart.fill" : "heart")
-                            .foregroundColor(item.isFavorite ? .red : .gray)
-                            .font(.title3)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                            .font(.title3)
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                        .lineLimit(1)
                 }
             }
-            .padding()
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - History Detail View
-struct HistoryDetailView: View {
-    let item: MenuProcessResult
-    
-    private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .full
-        formatter.timeStyle = .medium
-        formatter.locale = Locale(identifier: "zh_CN")
-        return formatter.string(from: item.scanDate)
-    }
-    
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Header info
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("扫描时间")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(formattedDate)
-                        .font(.body)
-                    
-                    if item.isFavorite {
-                        Label("已收藏", systemImage: "heart.fill")
-                            .foregroundColor(.red)
-                            .font(.caption)
-                    }
+            
+            Spacer()
+            
+            // Actions
+            VStack {
+                Button(action: onToggleFavorite) {
+                    Image(systemName: item.isFavorite ? "heart.fill" : "heart")
+                        .foregroundColor(item.isFavorite ? .red : .gray)
+                        .font(.title3)
                 }
-                .padding()
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(12)
+                .buttonStyle(PlainButtonStyle())
                 
-                // Menu items
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("菜品列表 (\(item.items.count))")
-                        .font(.headline)
-                    
-                    ForEach(item.items) { menuItem in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(menuItem.translatedName ?? menuItem.originalName)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                    
-                                    if menuItem.translatedName != nil {
-                                        Text(menuItem.originalName)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    
-                                    if let price = menuItem.price {
-                                        Text(price)
-                                            .font(.caption)
-                                            .foregroundColor(.blue)
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                if menuItem.hasUserAllergens {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .foregroundColor(.red)
-                                }
-                            }
-                            
-                            if let description = menuItem.description {
-                                Text(description)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(8)
-                        .shadow(radius: 1)
-                    }
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                        .font(.title3)
                 }
-                .padding(.horizontal)
+                .buttonStyle(PlainButtonStyle())
             }
-            .padding()
         }
-        .navigationTitle("历史详情")
-        .navigationBarTitleDisplayMode(.inline)
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .gray.opacity(0.1), radius: 2, y: 1)
     }
 }
-
-#Preview {
-    HistoryView()
-} 

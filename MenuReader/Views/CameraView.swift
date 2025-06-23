@@ -15,8 +15,6 @@ struct CameraView: View {
     @StateObject private var offlineManager = OfflineManager.shared
     
     @State private var showPhotoLibrary = false
-    @State private var showHistoryView = false
-    @State private var showProfileView = false
     @State private var showImagePreview = false
     @State private var showCameraSettings = false
     @State private var selectedImage: UIImage?
@@ -30,6 +28,9 @@ struct CameraView: View {
     @State private var showAnalysisResult = false
     @State private var isAnalyzing = false
     @State private var analysisError: String?
+    
+    // 新增：控制相机会话的智能管理
+    @State private var shouldRestartCamera = false
     
     // 设备方向监听
     @State private var orientationNotifier = NotificationCenter.default.publisher(
@@ -48,6 +49,7 @@ struct CameraView: View {
                     ZStack {
                         CameraPreviewView(cameraManager: cameraManager)
                             .ignoresSafeArea()
+                            .allowsHitTesting(false) // 允许点击事件穿透到下层按钮
                         
 
                     }
@@ -84,9 +86,7 @@ struct CameraView: View {
                         Spacer()
                         
                         // 右上角：用户设置
-                        Button(action: {
-                            showProfileView = true
-                        }) {
+                        NavigationLink(value: "profile") {
                             Image(systemName: "person.circle.fill")
                                 .font(.system(size: 20))
                                 .foregroundColor(.white)
@@ -96,6 +96,7 @@ struct CameraView: View {
                         }
                         .padding(.trailing, 20)
                     }
+                    .zIndex(10) // 确保按钮在最上层
                     .padding(.top, max(geometry.safeAreaInsets.top - 5, 10))
                     
                     // 网络状态指示器
@@ -119,9 +120,7 @@ struct CameraView: View {
                     // 主要控制区域
                     HStack {
                         // 左侧：历史记录按钮
-                        Button(action: {
-                            showHistoryView = true
-                        }) {
+                        NavigationLink(value: "history") {
                             Image(systemName: "clock.fill")
                                 .font(.system(size: 20))
                                 .foregroundColor(.white)
@@ -171,6 +170,7 @@ struct CameraView: View {
                                 .clipShape(Circle())
                         }
                     }
+                    .zIndex(10) // 确保按钮在最上层
                     .padding(.horizontal, 30)
                     .padding(.bottom, geometry.safeAreaInsets.bottom + 20)
                 }
@@ -196,15 +196,36 @@ struct CameraView: View {
                     }
                     .transition(.opacity)
                 }
+                
+
             }
         }
         .statusBarHidden(true) // 隐藏状态栏以获得沉浸式体验
+        .toolbar(.hidden, for: .navigationBar) // 隐藏相机页面的导航栏，但保持导航功能
+
         .onAppear {
-            setupCamera()
+            // 智能相机会话管理
+            if !cameraManager.isConfigured {
+                setupCamera()
+            } else if shouldRestartCamera {
+                // 从后台回来时重新启动
+                cameraManager.startSession()
+                shouldRestartCamera = false
+            } else {
+                // 正常情况下确保会话运行
+                cameraManager.startSession()
+            }
             startOrientationMonitoring()
         }
         .onDisappear {
-            cameraManager.stopSession()
+            // 标记需要重新启动，但延迟停止会话避免闪烁
+            shouldRestartCamera = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // 延迟停止，如果0.5秒内重新出现则不停止
+                if shouldRestartCamera {
+                    cameraManager.stopSession()
+                }
+            }
             stopOrientationMonitoring()
         }
         .onChange(of: cameraManager.capturedImage) { image in
@@ -228,14 +249,8 @@ struct CameraView: View {
                 showImagePreview = true
             }
         }
-        .navigationDestination(isPresented: $showHistoryView) {
-            HistoryView()
-        }
         .sheet(isPresented: $showCameraSettings) {
             CameraSettingsView(cameraManager: cameraManager)
-        }
-        .navigationDestination(isPresented: $showProfileView) {
-            ProfileView()
         }
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
