@@ -120,6 +120,9 @@ struct HistoryView: View {
                 StorageManagementView()
             }
         }
+        .navigationDestination(for: MenuProcessResult.self) { item in
+            HistoryDetailView(item: item)
+        }
         .navigationBarHidden(true) // 隐藏系统导航栏，使用自定义AppPageHeader
         .preferredColorScheme(.light) // 强制使用浅色主题
     }
@@ -187,7 +190,7 @@ struct HistoryItemRow: View {
     }
     
     var body: some View {
-        NavigationLink(destination: HistoryDetailView(item: item)) {
+        NavigationLink(value: item) {
             HStack(spacing: 12) {
                 // Thumbnail
                 thumbnailImage

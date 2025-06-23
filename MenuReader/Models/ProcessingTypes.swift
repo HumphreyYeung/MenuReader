@@ -48,7 +48,7 @@ struct MenuAnalysisResult: Codable {
 }
 
 // MARK: - Menu Item Analysis
-struct MenuItemAnalysis: Codable, Identifiable {
+struct MenuItemAnalysis: Codable, Identifiable, Hashable {
     let id = UUID()
     let originalName: String
     let translatedName: String?
@@ -104,7 +104,7 @@ struct GoogleSearchInformation: Codable {
 
 // MARK: - Menu Process Result (for NetworkService compatibility)
 // Note: MenuItem is defined in MenuItem.swift
-struct MenuProcessResult: Codable, Identifiable {
+struct MenuProcessResult: Codable, Identifiable, Hashable {
     let id: UUID
     let items: [MenuItemAnalysis]
     let scanDate: Date
