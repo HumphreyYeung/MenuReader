@@ -228,23 +228,15 @@ struct CameraView: View {
                 showImagePreview = true
             }
         }
-        .background(
-            NavigationLink(
-                destination: HistoryView(),
-                isActive: $showHistoryView,
-                label: { EmptyView() }
-            )
-        )
+        .navigationDestination(isPresented: $showHistoryView) {
+            HistoryView()
+        }
         .sheet(isPresented: $showCameraSettings) {
             CameraSettingsView(cameraManager: cameraManager)
         }
-        .background(
-            NavigationLink(
-                destination: ProfileView(),
-                isActive: $showProfileView,
-                label: { EmptyView() }
-            )
-        )
+        .navigationDestination(isPresented: $showProfileView) {
+            ProfileView()
+        }
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
                 PhotoPreviewView(image: image) {
