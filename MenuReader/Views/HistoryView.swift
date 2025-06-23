@@ -120,6 +120,7 @@ struct HistoryView: View {
                 StorageManagementView()
             }
         }
+        .navigationBarHidden(true) // 隐藏系统导航栏，使用自定义AppPageHeader
         .preferredColorScheme(.light) // 强制使用浅色主题
     }
     
