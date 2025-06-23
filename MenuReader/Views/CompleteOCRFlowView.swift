@@ -13,6 +13,7 @@ struct CompleteOCRFlowView: View {
     @StateObject private var menuAnalysisService = MenuAnalysisService.shared
     @StateObject private var googleSearchService = GoogleSearchService.shared
     @StateObject private var cameraManager = CameraManager()
+    @Environment(\.dismiss) private var dismiss
     
     @State private var currentStep: OCRFlowStep = .camera
     @State private var selectedImage: UIImage?
@@ -33,13 +34,13 @@ struct CompleteOCRFlowView: View {
     }
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // 完整流程模式
-                completeFlowModeView
-            }
-            .navigationTitle("菜单识别")
-        .navigationBarTitleDisplayMode(.large)
+        VStack(spacing: 0) {
+            AppPageHeader("菜单识别", showBackButton: true, onBackAction: {
+                dismiss()
+            })
+            
+            // 完整流程模式
+            completeFlowModeView
         .onAppear {
             print("🔧 [CompleteOCRFlowView] 检查环境配置:")
             EnvironmentLoader.shared.printConfiguration()
@@ -70,6 +71,7 @@ struct CompleteOCRFlowView: View {
                 useCamera: useCamera
             )
         }
+        .preferredColorScheme(.light)
     }
     
 

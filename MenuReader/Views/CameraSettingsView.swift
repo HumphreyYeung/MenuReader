@@ -26,7 +26,7 @@ struct CameraSettingsView: View {
                 // 标题栏
                 HStack {
                     Text("相机设置")
-                        .font(.headline)
+                        .font(AppFonts.headline)
                         .foregroundColor(.white)
                     
                     Spacer()
@@ -34,16 +34,16 @@ struct CameraSettingsView: View {
                     Button("完成") {
                         dismiss()
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(AppColors.accent)
                 }
                 .padding(.horizontal)
-                .padding(.top, 20)
+                .padding(.top, AppSpacing.m)
                 
                 // 设置选项
-                VStack(spacing: 16) {
+                VStack(spacing: AppSpacing.m) {
                     
                     // 曝光调节
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
                         HStack {
                             Image(systemName: "sun.max")
                                 .font(.title2)
@@ -52,7 +52,7 @@ struct CameraSettingsView: View {
                             
                             Text("曝光")
                                 .foregroundColor(.white)
-                                .font(.body)
+                                .font(AppFonts.body)
                             
                             Spacer()
                             
@@ -63,20 +63,20 @@ struct CameraSettingsView: View {
                             } label: {
                                 HStack {
                                     Text(String(format: "%.1f", cameraManager.exposureValue))
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(AppColors.accent)
                                     Image(systemName: showExposureSlider ? "chevron.up" : "chevron.down")
-                                        .foregroundColor(.blue)
-                                        .font(.caption)
+                                        .foregroundColor(AppColors.accent)
+                                        .font(AppFonts.caption)
                                 }
                             }
                         }
                         .padding(.horizontal)
                         
                         if showExposureSlider {
-                            VStack(spacing: 8) {
+                            VStack(spacing: AppSpacing.xs) {
                                 HStack {
                                     Text("-2.0")
-                                        .font(.caption)
+                                        .font(AppFonts.caption)
                                         .foregroundColor(.gray)
                                     
                                     Spacer()
@@ -86,13 +86,13 @@ struct CameraSettingsView: View {
                                             cameraManager.resetExposure()
                                         }
                                     }
-                                    .font(.caption)
-                                    .foregroundColor(.blue)
+                                    .font(AppFonts.caption)
+                                    .foregroundColor(AppColors.accent)
                                     
                                     Spacer()
                                     
                                     Text("2.0")
-                                        .font(.caption)
+                                        .font(AppFonts.caption)
                                         .foregroundColor(.gray)
                                 }
                                 
@@ -104,21 +104,21 @@ struct CameraSettingsView: View {
                                     in: -2.0...2.0,
                                     step: 0.1
                                 )
-                                .accentColor(.blue)
+                                .accentColor(AppColors.accent)
                             }
                             .padding(.horizontal)
                             .transition(.opacity.combined(with: .scale))
                         }
                     }
                 }
-                .padding(.bottom, 30)
+                .padding(.bottom, AppSpacing.xl)
             }
             .background(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: AppSpacing.m)
                     .fill(Color.black.opacity(0.8))
                     .background(.ultraThinMaterial)
             )
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppSpacing.m)
         }
     }
 }

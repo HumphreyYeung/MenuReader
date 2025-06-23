@@ -19,9 +19,10 @@ struct MenuReaderApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ZStack {
-                CameraView()
-                    .preferredColorScheme(.dark) // 相机界面使用深色主题
+            NavigationView {
+                ZStack {
+                    CameraView()
+                        .preferredColorScheme(.dark) // 仅相机界面使用深色主题
                 
                 // Onboarding 覆盖层
                 if showOnboarding {
@@ -31,6 +32,9 @@ struct MenuReaderApp: App {
                         .animation(.easeInOut(duration: 0.5), value: showOnboarding)
                 }
             }
+            .preferredColorScheme(.light) // 全局使用浅色主题
+            }
+            .navigationBarHidden(true) // 隐藏导航栏保持相机界面沉浸式
         }
     }
 }

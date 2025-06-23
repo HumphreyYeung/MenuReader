@@ -218,6 +218,8 @@ struct CameraView: View {
         }
         .sheet(isPresented: $showPhotoLibrary) {
             PhotoPickerView(selectedImage: $selectedImage)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .onChange(of: selectedImage) { image in
             // 当selectedImage更新时，检查是否需要显示预览
@@ -226,37 +228,23 @@ struct CameraView: View {
                 showImagePreview = true
             }
         }
-        .sheet(isPresented: $showHistoryView) {
-            NavigationView {
-                HistoryView()
-                    .navigationBarTitleDisplayMode(.inline)
-                    .navigationBarBackButtonHidden(true)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("完成") {
-                                showHistoryView = false
-                            }
-                        }
-                    }
-            }
-        }
+        .background(
+            NavigationLink(
+                destination: HistoryView(),
+                isActive: $showHistoryView,
+                label: { EmptyView() }
+            )
+        )
         .sheet(isPresented: $showCameraSettings) {
             CameraSettingsView(cameraManager: cameraManager)
         }
-        .sheet(isPresented: $showProfileView) {
-            NavigationView {
-                ProfileView()
-                    .navigationBarTitleDisplayMode(.inline)
-                    .navigationBarBackButtonHidden(true)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("完成") {
-                                showProfileView = false
-                            }
-                        }
-                    }
-            }
-        }
+        .background(
+            NavigationLink(
+                destination: ProfileView(),
+                isActive: $showProfileView,
+                label: { EmptyView() }
+            )
+        )
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
                 PhotoPreviewView(image: image) {

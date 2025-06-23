@@ -1,0 +1,159 @@
+App 设计系统清单 (Design System Checklist)
+1. 色彩系统 (Color System)
+
+色彩是情感和品牌的第一触点。保持一致性是关键。
+
+策略： 创建一个 UIColor 的扩展或一个专门的 AppColors 结构体来管理所有颜色，避免在代码中硬编码Hex值。
+
+类别 (Category)	用途说明	建议色值 (Hex)	Swift 代码示例 (在一个 AppColors.swift 文件中)
+主背景色 (Background)	App 的主要背景，营造温暖、干净的感觉	#F7F5F2 (米白)	static let background = UIColor(hex: "#F7F5F2")
+内容背景色 (Content BG)	卡片、弹窗等内容区域的背景，与主背景形成细微区分	#FFFFFF (纯白)	static let contentBackground = UIColor.white
+主文本/按钮色 (Primary)	主要文字、主要按钮背景、重要图标	#1C1C1E (近黑)	static let primary = UIColor(hex: "#1C1C1E")
+次要文本色 (Secondary)	辅助性文字，如菜品描述、时间戳等	#8A8A8E (中灰)	static let secondaryText = UIColor(hex: "#8A8A8E")
+点缀/高亮色 (Accent)	可交互元素、加载指示器、高亮状态、小标题等	#FF9500 (亮橙)	static let accent = UIColor(hex: "#FF9500")
+按钮文字色 (Button Text)	用于深色按钮上的文字	#FFFFFF (纯白)	static let buttonText = UIColor.white
+分割线颜色 (Separator)	用于列表、卡片之间的分割线，需要非常淡	#E5E5EA (浅灰)	static let separator = UIColor(hex: "#E5E5EA")
+成功提示色 (Success)	用于操作成功的提示（如“已收藏”）	#34C759 (系统绿)	static let success = UIColor.systemGreen
+失败/错误色 (Error)	用于操作失败的提示或警告	#FF3B30 (系统红)	static let error = UIColor.systemRed
+
+（你需要一个 UIColor 的扩展来通过Hex字符串初始化，这在网上很容易找到）
+
+2. 字体系统 (Typography System)
+
+字体是UI的骨架，定义了信息的层级和气质。
+
+策略： 强烈建议使用苹果官方的 SF Pro 字体。它为iOS原生设计，支持动态字体（Dynamic Type），对多语言支持极佳，并且自带多种字重，完全符合“精致”的要求。通过 UIFont.preferredFont(forTextStyle:) 来设置，可以自动适配用户的系统字体大小设置。
+
+样式名称 (Style Name)	建议字重 (Weight)	建议大小 (Size)	用途说明	Swift 代码示例
+大标题 (Large Title)	Bold	34pt	屏幕主标题，如“菜单翻译”	UIFont.preferredFont(forTextStyle: .largeTitle)
+标题 1 (Title 1)	Bold	28pt	卡片式页面的主标题	UIFont.preferredFont(forTextStyle: .title1)
+标题 2 (Headline)	Semibold	17pt	菜品名称、列表项标题	UIFont.preferredFont(forTextStyle: .headline)
+正文 (Body)	Regular	17pt	菜品翻译后的内容、主要段落文字	UIFont.preferredFont(forTextStyle: .body)
+标注 (Caption)	Regular	12pt	价格、备注、图片来源等小字信息	UIFont.preferredFont(forTextStyle: .caption1)
+按钮文本 (Button)	Semibold	17pt	所有主要按钮上的文字	.systemFont(ofSize: 17, weight: .semibold)
+3. 图标系统 (Iconography System)
+
+图标是超越语言的符号，对你的 App 尤其重要。
+
+策略： 再次强烈建议使用苹果官方的 SF Symbols。这是一个拥有数千个图标的库，与 SF 字体完美对齐，可以改变字重、缩放，并且可以像文本一样使用颜色。这能极大提升UI的精致感和一致性。
+
+用途 (Usage)	建议图标 (SF Symbol Name)	颜色配置	Swift 代码示例
+扫描/拍照	camera.viewfinder	AppColors.primary	UIImage(systemName: "camera.viewfinder")
+从相册选择	photo.on.rectangle.angled	AppColors.primary	UIImage(systemName: "photo.on.rectangle.angled")
+翻译	text.magnifyingglass	AppColors.accent (如果作为高亮功能)	UIImage(systemName: "text.magnifyingglass")
+设置	gearshape.fill	AppColors.primary	UIImage(systemName: "gearshape.fill")
+历史记录	clock.arrow.circlepath	AppColors.primary	UIImage(systemName: "clock.arrow.circlepath")
+收藏 (未选中)	star	AppColors.secondaryText	UIImage(systemName: "star")
+收藏 (已选中)	star.fill	AppColors.accent	UIImage(systemName: "star.fill")
+返回	chevron.backward	AppColors.primary	UIImage(systemName: "chevron.backward")
+分享	square.and.arrow.up	AppColors.primary	UIImage(systemName: "square.and.arrow.up")
+查看图片	photo.fill	AppColors.secondaryText	UIImage(systemName: "photo.fill")
+4. 布局与间距 (Layout & Spacing)
+
+精致感很大程度上来源于和谐的间距和留白。
+
+策略： 使用 8点网格系统。即所有的间距、边距都使用 8 的倍数（如 8, 16, 24, 32...）。这会给你的UI带来视觉上的节奏感和秩序感。
+
+元素 (Element)	建议值 (pt)	用途说明
+屏幕边距 (Screen Margins)	16 或 24	内容距离屏幕左右边缘的距离
+控件标准间距 (Standard Gap)	16	标题和内容之间，不同功能块之间的距离
+紧凑间距 (Compact Gap)	8	图标和其旁边的文字，标签内部的间距
+列表项间距 (List Item Gap)	12 或 16	列表中每个菜品卡片之间的垂直距离
+卡片内边距 (Card Padding)	16	卡片内文字、图片距离卡片边缘的距离
+标准圆角 (Corner Radius)	12	主要按钮、卡片、输入框的圆角大小
+小圆角 (Small Corner Radius)	8	标签（Tag）等小元素的圆角
+5. 控件样式 (Component Styling)
+
+将以上所有元素组合应用到具体的 UIKit 控件上。
+
+策略： 为常用控件（按钮、卡片）创建自定义子类或配置函数，以复用样式。
+
+A. 按钮 (UIButton)
+
+主按钮 (Primary Button - 黑色)
+
+背景色: AppColors.primary
+
+文字颜色: AppColors.buttonText
+
+字体: AppFonts.button
+
+圆角: 12
+
+配置: configuration.cornerStyle = .capsule (如果想做胶囊形) 或手动设置 layer.cornerRadius。
+
+次要按钮 (Secondary Button - 橙色边框)
+
+背景色: UIColor.clear
+
+边框颜色: AppColors.accent
+
+边框宽度: 1.5
+
+文字颜色: AppColors.accent
+
+字体: AppFonts.button
+
+圆角: 12
+
+文本按钮 (Text Button - 橙色文字)
+
+背景色: UIColor.clear
+
+文字颜色: AppColors.accent
+
+字体: AppFonts.button
+
+B. 菜品卡片 (Dish Card - UIView or UICollectionViewCell)
+
+背景色: AppColors.contentBackground (纯白)
+
+圆角: 16
+
+阴影 (Shadow) - 这是精致感的关键！
+
+颜色: UIColor.black.withAlphaComponent(0.1)
+
+偏移: (x: 0, y: 4)
+
+模糊半径: 12
+
+不透明度: 0.8
+
+代码示例 (UIView 扩展):
+
+Generated swift
+extension UIView {
+    func applyCardShadow() {
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.1
+        layer.shadowOffset = CGSize(width: 0, height: 4)
+        layer.shadowRadius = 12
+        layer.masksToBounds = false
+    }
+}
+
+
+C. 导航栏 (UINavigationBar)
+
+scrollEdgeAppearance 和 standardAppearance 的背景色设为 AppColors.background。
+
+标题文字属性: [.foregroundColor: AppColors.primary, .font: AppFonts.headline]
+
+tintColor (返回按钮和右侧按钮图标颜色): AppColors.primary
+
+如何落地到代码
+
+创建 StyleGuide 文件夹：在你的 Xcode 项目中创建一个名为 StyleGuide 或 Theme 的文件夹。
+
+创建文件：在其中创建 AppColors.swift, AppFonts.swift, UIView+Extensions.swift 等文件。
+
+填充代码：将上面清单中的代码示例填充进去。
+
+全局应用：
+
+在 AppDelegate 或 SceneDelegate 中，配置全局的 UI 外观，如 NavigationBar, TabBar 等。
+
+在你的 UIViewController 和 UIView 子类中，直接调用 AppColors.background, myLabel.font = AppFonts.body 等。
+
+通过这套系统化的清单，你的 App 不仅会拥有统一、协调的视觉风格，而且当未来需要调整设计时（例如把橙色换成蓝色），你只需要修改 AppColors.swift 中的一个变量，整个 App 的主题色就会随之改变，极大提高了开发和维护效率。祝你开发顺利！

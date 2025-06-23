@@ -13,9 +13,14 @@ struct ProfileView: View {
     @State private var showingAddCustomAllergen = false
     @State private var showingPrivacyPolicy = false
     @State private var showingTermsOfService = false
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        VStack(spacing: 0) {
+            AppPageHeader("个人设置", showBackButton: true, onBackAction: {
+                dismiss()
+            })
+            
             Form {
                 // MARK: - Language Settings Section
                 Section(header: Text("语言设置")) {
@@ -37,8 +42,8 @@ struct ProfileView: View {
                     appInfoView
                 }
             }
-            .navigationTitle("个人设置")
-            .navigationBarTitleDisplayMode(.large)
+            .scrollContentBackground(.hidden) // 隐藏默认背景
+            .background(AppColors.background) // 应用DesignSystem背景色
             .alert("添加自定义过敏原", isPresented: $showingAddCustomAllergen) {
                 TextField("输入过敏原名称", text: $viewModel.customAllergenInput)
                 Button("添加") {
@@ -57,6 +62,7 @@ struct ProfileView: View {
                 WebView(url: "https://example.com/terms-of-service", title: "服务条款")
             }
         }
+        .preferredColorScheme(.light) // 强制使用浅色主题
     }
     
     // MARK: - Language Settings View
@@ -65,6 +71,7 @@ struct ProfileView: View {
             // Target Language (Translation Language)
             HStack {
                 Label("目标语言", systemImage: "globe")
+                    .foregroundColor(AppColors.primary)
                 Spacer()
                 Picker("目标语言", selection: $viewModel.userProfile.targetLanguage) {
                     ForEach(SupportedLanguage.allCases, id: \.rawValue) { language in
@@ -72,6 +79,7 @@ struct ProfileView: View {
                     }
                 }
                 .pickerStyle(MenuPickerStyle())
+                .accentColor(AppColors.accent)
             }
         }
     }
@@ -87,9 +95,9 @@ struct ProfileView: View {
                     }) {
                         HStack {
                             Image(systemName: viewModel.hasAllergen(allergen.rawValue) ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(viewModel.hasAllergen(allergen.rawValue) ? .blue : .gray)
+                                .foregroundColor(viewModel.hasAllergen(allergen.rawValue) ? AppColors.accent : AppColors.secondaryText)
                             Text(allergen.displayName)
-                                .foregroundColor(.primary)
+                                .foregroundColor(AppColors.primary)
                             Spacer()
                         }
                     }
@@ -100,6 +108,7 @@ struct ProfileView: View {
                 if allergen != CommonAllergen.allCases.last {
                     Divider()
                         .padding(.leading, 40)
+                        .background(AppColors.separator)
                 }
             }
             
@@ -107,18 +116,20 @@ struct ProfileView: View {
             if !viewModel.customAllergens.isEmpty {
                 Divider()
                     .padding(.leading, 40)
+                    .background(AppColors.separator)
                 
                 ForEach(viewModel.customAllergens, id: \.self) { allergen in
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppColors.accent)
                         Text(allergen)
+                            .foregroundColor(AppColors.primary)
                         Spacer()
                         Button(action: {
                             viewModel.removeCustomAllergen(allergen)
                         }) {
                             Image(systemName: "minus.circle.fill")
-                                .foregroundColor(.red)
+                                .foregroundColor(AppColors.error)
                         }
                     }
                     .padding(.vertical, 2)
@@ -128,15 +139,16 @@ struct ProfileView: View {
             // Add Custom Allergen Button
             Divider()
                 .padding(.leading, 40)
+                .background(AppColors.separator)
             
             Button(action: {
                 showingAddCustomAllergen = true
             }) {
                 HStack {
                     Image(systemName: "plus.circle")
-                        .foregroundColor(.blue)
+                        .foregroundColor(AppColors.accent)
                     Text("添加自定义过敏原")
-                        .foregroundColor(.blue)
+                        .foregroundColor(AppColors.accent)
                     Spacer()
                 }
             }
@@ -152,26 +164,27 @@ struct ProfileView: View {
             }) {
                 HStack {
                     Label("隐私政策", systemImage: "lock.shield")
-                        .foregroundColor(.primary)
+                        .foregroundColor(AppColors.primary)
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryText)
                         .font(.caption)
                 }
             }
             
             Divider()
                 .padding(.leading, 40)
+                .background(AppColors.separator)
             
             Button(action: {
                 showingTermsOfService = true
             }) {
                 HStack {
                     Label("服务条款", systemImage: "doc.text")
-                        .foregroundColor(.primary)
+                        .foregroundColor(AppColors.primary)
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryText)
                         .font(.caption)
                 }
             }
@@ -183,19 +196,22 @@ struct ProfileView: View {
         VStack(spacing: 0) {
             HStack {
                 Label("版本", systemImage: "info.circle")
+                    .foregroundColor(AppColors.primary)
                 Spacer()
                 Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.secondaryText)
             }
             
             Divider()
                 .padding(.leading, 40)
+                .background(AppColors.separator)
             
             HStack {
                 Label("构建版本", systemImage: "hammer")
+                    .foregroundColor(AppColors.primary)
                 Spacer()
                 Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.secondaryText)
             }
         }
     }

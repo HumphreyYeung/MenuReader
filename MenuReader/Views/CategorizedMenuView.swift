@@ -50,7 +50,14 @@ struct CategorizedMenuView: View {
     }
     
     var body: some View {
-        NavigationView {
+        VStack(spacing: 0) {
+            AppPageHeader(
+                "菜单",
+                showBackButton: false,
+                rightButton: AnyView(cartButton)
+            )
+            
+            // 页面内容
             VStack(spacing: 0) {
                 // 搜索和过滤栏
                 searchAndFilterSection
@@ -63,20 +70,14 @@ struct CategorizedMenuView: View {
                 }
             }
             .background(DesignSystem.Colors.backgroundPrimary)
-            .navigationTitle("菜单")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    cartButton
-                }
-            }
             .refreshable {
                 await refreshMenu()
             }
-            .sheet(isPresented: $showingCart) {
-                CartView(cartItems: $cartItems)
-            }
         }
+        .sheet(isPresented: $showingCart) {
+            CartView(cartItems: $cartItems)
+        }
+        .preferredColorScheme(.light)
     }
     
     // MARK: - Search and Filter Section

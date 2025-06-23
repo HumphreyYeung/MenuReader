@@ -16,6 +16,7 @@ struct HistoryView: View {
     @State private var currentPage = 0
     @State private var isLoading = false
     @State private var showingStorageSettings = false
+    @Environment(\.dismiss) private var dismiss
     
     private let pageSize = 20
     
@@ -35,34 +36,62 @@ struct HistoryView: View {
     }
     
     var body: some View {
-        NavigationView {
+        VStack(spacing: 0) {
+            AppPageHeader(
+                "扫描历史",
+                showBackButton: true,
+                onBackAction: {
+                    dismiss()
+                },
+                rightButton: AnyView(
+                    Menu {
+                        Button(action: { showingStorageSettings = true }) {
+                            Label("存储管理", systemImage: "externaldrive.badge.questionmark")
+                        }
+                        
+                        if offlineManager.pendingUploadsCount > 0 {
+                            Button(action: { offlineManager.processQueue() }) {
+                                Label("同步待上传数据 (\(offlineManager.pendingUploadsCount))", 
+                                      systemImage: "arrow.up.circle")
+                            }
+                            .disabled(offlineManager.isOfflineMode || offlineManager.isProcessingQueue)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundColor(AppColors.accent)
+                            .font(.system(size: AppIcons.mediumSize))
+                    }
+                )
+            )
             VStack(spacing: 0) {
                 // Search bar and filter
                 VStack {
                     HStack {
                         Image(systemName: "magnifyingglass")
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.secondaryText)
                         TextField("搜索菜品...", text: $searchText)
+                            .foregroundColor(AppColors.primary)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
+                    .padding(.horizontal, AppSpacing.m)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(AppColors.lightBackground)
+                    .cornerRadius(AppSpacing.xs)
                     .padding(.horizontal)
                     
                     HStack {
                         Toggle("只显示收藏", isOn: $showingFavoritesOnly)
                             .toggleStyle(SwitchToggleStyle())
+                            .accentColor(AppColors.accent)
                         Spacer()
                         Text("共 \(filteredItems.count) 条记录")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.secondaryText)
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 8)
                 }
-                .background(Color(.systemBackground))
-                .shadow(radius: 1)
+                .background(AppColors.contentBackground)
+                .shadow(color: AppColors.separator, radius: 1)
                 
                 // History list
                 if filteredItems.isEmpty {
@@ -79,29 +108,11 @@ struct HistoryView: View {
                         }
                     }
                     .listStyle(PlainListStyle())
+                    .scrollContentBackground(.hidden)
+                    .background(AppColors.background)
                 }
             }
-            .navigationTitle("扫描历史")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button(action: { showingStorageSettings = true }) {
-                            Label("存储管理", systemImage: "externaldrive.badge.questionmark")
-                        }
-                        
-                        if offlineManager.pendingUploadsCount > 0 {
-                            Button(action: { offlineManager.processQueue() }) {
-                                Label("同步待上传数据 (\(offlineManager.pendingUploadsCount))", 
-                                      systemImage: "arrow.up.circle")
-                            }
-                            .disabled(offlineManager.isOfflineMode || offlineManager.isProcessingQueue)
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
-            }
+            .background(AppColors.background)
             .onAppear {
                 loadHistory()
             }
@@ -109,6 +120,7 @@ struct HistoryView: View {
                 StorageManagementView()
             }
         }
+        .preferredColorScheme(.light) // 强制使用浅色主题
     }
     
     private var emptyStateView: some View {
@@ -117,17 +129,17 @@ struct HistoryView: View {
             
             Image(systemName: searchText.isEmpty && !showingFavoritesOnly ? "clock.circle" : "magnifyingglass.circle")
                 .font(.system(size: 60))
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryText)
             
             Text(searchText.isEmpty && !showingFavoritesOnly ? "暂无扫描历史" : "未找到相关记录")
-                .font(.title3)
-                .foregroundColor(.secondary)
+                .font(AppFonts.title1)
+                .foregroundColor(AppColors.primary)
                 .padding(.top)
             
             if searchText.isEmpty && !showingFavoritesOnly {
                 Text("扫描菜单后会显示在这里")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(AppFonts.body)
+                    .foregroundColor(AppColors.secondaryText)
                     .padding(.top, 4)
             }
             
