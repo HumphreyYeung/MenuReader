@@ -1,0 +1,72 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# SwiftUI Development Rules (iOS 16.6+)
+
+## STATE MANAGEMENT
+
+• Core pattern: ObservableObject + @Published for all business logic
+• View models:
+  - Initialize with @StateObject in parent views
+  - Pass as let model: Model to child views
+• View-local state: @State only for trivial UI state (e.g., toggles, text fields)
+• Shared state: @Binding only when direct mutation by a child view is needed
+• Global services: @EnvironmentObject for shared dependencies (e.g., API clients)
+• Strictly avoid: @Observable, @Bindable. Do not use @EnvironmentObject for transient or view-specific UI state.
+
+## NAVIGATION (Modern Stack)
+
+• Primary pattern: NavigationStack with a state-bound path (e.g., @State private var path = NavigationPath())
+• View-based navigation: Use NavigationLink("Label", value: YourRouteType.screenA)
+• Programmatic navigation: Manipulate the path variable directly (e.g., path.append(...))
+• Destination mapping: Use .navigationDestination(for: YourRouteType.self) { ... } in the root of the NavigationStack
+• Modal presentation:
+  - Use .sheet for secondary flows (e.g., settings, pickers)
+  - Use .fullScreenCover for immersive, self-contained tasks
+• Deep linking: Handle by parsing the URL and programmatically updating the navigation path
+
+## LAYOUT SYSTEM
+
+• Core components:
+  - VStack/HStack + Spacer for basic layouts
+  - LazyVGrid for card displays (2-3 columns)
+  - ScrollView + LazyVStack for long lists
+• Responsive rules:
+  - Use GeometryReader sparingly for device adaptation (can impact performance)
+  - Size images with .aspectRatio(contentMode: .fill) and .clipped()
+  - Apply fixed heights only to atomic elements (e.g., buttons, icons)
+• Card design:
+  - Consistent corner radius: 12pt
+  - Shadow depth: 3pt radius, 2pt Y-offset
+  - Internal padding: 16pt uniform
+
+## PERFORMANCE
+
+• Image handling:
+  - AsyncImage with a custom placeholder (e.g., skeleton view)
+  - Prefer JPEG over PNG for network assets
+• List optimization:
+  - Always use LazyVStack or LazyHStack inside a ScrollView
+  - Implement .onAppear on list items for pagination
+• Networking:
+  - Use Combine or async/await for API requests
+  - Debounce user input for search fields (300ms)
+• Main thread:
+  - Annotate all UI-updating functions with @MainActor
+  - Offload heavy processing (e.g., OCR, data parsing) to a background actor or Task.detached
+
+## STYLE CONSTANTS
+
+• Organization: Encapsulate all constants in a central Theme struct (e.g., Theme.Color.primary)
+• Typography:
+  - Headline: SF Pro Rounded Bold, 17pt
+  - Body: SF Pro Regular, 15pt
+  - Caption: SF Pro Light, 13pt
+• Spacing (8pt Grid System):
+  - Base unit: 8pt
+  - Card padding: 16pt (2 units)
+  - Section margins: 24pt (3 units)
+
+// END OF RULES

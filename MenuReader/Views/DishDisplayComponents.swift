@@ -46,319 +46,301 @@ enum ImageLoadError: Equatable {
     }
 }
 
-// MARK: - 统一菜品卡片组件
+// MARK: - 重新设计的菜品卡片组件
 struct UnifiedDishCard: View {
     let menuItem: MenuItemAnalysis
     let dishImages: [DishImage]
     let showCartButton: Bool
+    @Binding var cartItems: [CartItem]
+    let isAnimating: Bool
     let onAddToCart: (() -> Void)?
+    let onRemoveFromCart: (() -> Void)?
     let onTapCard: (() -> Void)?
     
-    @State private var isExpanded = false
     @State private var selectedImageIndex = 0
+    
+    // 计算当前菜品在购物车中的数量
+    private var quantity: Int {
+        cartItems.first(where: { $0.menuItem.originalName == menuItem.originalName })?.quantity ?? 0
+    }
     
     init(menuItem: MenuItemAnalysis, 
          dishImages: [DishImage], 
          showCartButton: Bool = false,
+         cartItems: Binding<[CartItem]> = .constant([]),
+         isAnimating: Bool = false,
          onAddToCart: (() -> Void)? = nil,
+         onRemoveFromCart: (() -> Void)? = nil,
          onTapCard: (() -> Void)? = nil) {
         self.menuItem = menuItem
         self.dishImages = dishImages
         self.showCartButton = showCartButton
+        self._cartItems = cartItems
+        self.isAnimating = isAnimating
         self.onAddToCart = onAddToCart
+        self.onRemoveFromCart = onRemoveFromCart
         self.onTapCard = onTapCard
     }
     
     var body: some View {
         VStack(spacing: 0) {
-            // 主要内容区域
-            mainContentView
-            
-            // 展开的详细信息
-            if isExpanded {
-                expandedContentView
-                    .cardAppearTransition()
-            }
-        }
-        .primaryCardStyle()
-        .onTapGesture {
-            handleCardTap()
-        }
-    }
-    
-    // MARK: - Main Content
-    
-    private var mainContentView: some View {
-        HStack(spacing: 16) {
-            // 正方形图片区域
-            DishSquareImageView(
-                dishImages: dishImages,
-                menuItem: menuItem
-            )
+            // 主图片区域
+            imageSection
             
             // 菜品信息区域
-            VStack(alignment: .leading, spacing: 8) {
-                dishInfoView
-                
-                // 操作按钮区域（只在需要购物车按钮时显示）
-                if showCartButton {
-                    actionButtonsView
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            infoSection
         }
-        .padding(16)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .frame(maxWidth: .infinity)  // 确保卡片宽度一致
+        .overlay(
+            // 购物车动画圆点
+            animationDot
+        )
     }
     
-    private var dishInfoView: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.s) {
-            // 菜品名称和价格区域
+    // MARK: - 图片区域
+    private var imageSection: some View {
+        ZStack {
+            if !dishImages.isEmpty {
+                // 使用TabView实现滑动切换图片
+                TabView(selection: $selectedImageIndex) {
+                    ForEach(Array(dishImages.enumerated()), id: \.offset) { index, dishImage in
+                        
+                        CachedAsyncImage(url: dishImage.imageURL) {
+                            RoundedRectangle(cornerRadius: 0)
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 200)
+                                .overlay(
+                                    Image(systemName: "photo")
+                                        .foregroundColor(.gray)
+                                        .font(.system(size: 40))
+                                )
+                        } content: { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 200)
+                                .clipped()
+                        }
+                        .tag(index)
+                        .id("\(menuItem.originalName)-\(index)-\(dishImage.imageURL)")  // 添加稳定的ID避免重复加载
+                    }
+                }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                .frame(height: 200)
+                
+                // 多图片圆点指示器
+                if dishImages.count > 1 {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            HStack(spacing: 6) {
+                                ForEach(0..<dishImages.count, id: \.self) { index in
+                                    Circle()
+                                        .fill(index == selectedImageIndex ? .white : .white.opacity(0.5))
+                                        .frame(width: 6, height: 6)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.black.opacity(0.3))
+                            .cornerRadius(12)
+                            .padding(.trailing, 12)
+                            .padding(.bottom, 12)
+                        }
+                    }
+                }
+                
+                // 价格标签（左下角）- 使用橘色底白色字
+                if let price = menuItem.price {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text(price)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(.orange)  // 改为橘色
+                                .cornerRadius(8)
+                                .padding(.leading, 12)
+                                .padding(.bottom, 12)
+                            Spacer()
+                        }
+                    }
+                }
+            } else {
+                // 无图片占位符
+                RoundedRectangle(cornerRadius: 0)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 200)
+                    .overlay(
+                        VStack(spacing: 8) {
+                            Image(systemName: "photo")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 40))
+                            Text("暂无图片")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                    )
+            }
+        }
+        .clipShape(
+            UnevenRoundedRectangle(
+                cornerRadii: .init(
+                    topLeading: 12,
+                    bottomLeading: 0,
+                    bottomTrailing: 0,
+                    topTrailing: 12
+                )
+            )
+        )
+        .contentShape(Rectangle())  // 限制点击区域仅限于图片区域
+        .onTapGesture {
+            // 图片区域点击不触发卡片点击事件，保留给图片切换
+        }
+    }
+    
+    // MARK: - 菜品信息区域
+    private var infoSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 菜品名称 - 同时显示原始和翻译名称
             HStack {
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // 原始名称
                     Text(menuItem.originalName)
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                        .lineLimit(2)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.black)
+                        .lineLimit(1)
                         .multilineTextAlignment(.leading)
                     
-                    if let translatedName = menuItem.translatedName {
+                    // 翻译名称 - 始终显示（如果存在且不同）
+                    if let translatedName = menuItem.translatedName, 
+                       !translatedName.isEmpty,
+                       translatedName != menuItem.originalName {
                         Text(translatedName)
-                            .font(DesignSystem.Typography.body)
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
                     }
                 }
                 
                 Spacer()
                 
-                // 价格标签
-                if let price = menuItem.price {
-                    Text(price)
-                        .font(DesignSystem.Typography.captionMedium)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, DesignSystem.Spacing.s)
-                        .padding(.vertical, DesignSystem.Spacing.xs)
-                        .background(DesignSystem.Colors.accent)
-                        .cornerRadius(DesignSystem.CornerRadius.small)
+                // +/- 购物车按钮
+                if showCartButton {
+                    addToCartButtons
                 }
             }
             
             // 描述
             if let description = menuItem.description, !description.isEmpty {
                 Text(description)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .lineLimit(isExpanded ? nil : 2)
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                    .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }
             
-            // 过敏原警告和标签
-            allergenWarningView
-            
-            // 置信度显示
-            HStack {
-                Text("识别准确度: \(Int(menuItem.confidence * 100))%")
-                    .font(DesignSystem.Typography.caption2)
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
-                
-                Spacer()
-            }
+            // 标签（素食、辣度等）
+            tagsSection
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)  // 增加底部间距避免重叠
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTapCard?()
         }
     }
     
-    // MARK: - Allergen Warning View
-    
-    private var allergenWarningView: some View {
-        Group {
-            // 过敏原警告（如果有用户过敏原）
-            if let allergens = menuItem.allergens, !allergens.isEmpty {
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(DesignSystem.Colors.error)
-                        .font(DesignSystem.Typography.caption)
-                    
-                    Text("包含过敏原: \(allergens.joined(separator: ", "))")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.error)
-                        .fontWeight(.medium)
-                    
-                    Spacer()
+    // MARK: - 添加到购物车按钮
+    private var addToCartButtons: some View {
+        HStack(spacing: 8) {
+            if quantity > 0 {
+                // 减号按钮
+                Button(action: {
+                    onRemoveFromCart?()
+                }) {
+                    Image(systemName: "minus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.orange)
+                        .frame(width: 32, height: 32)
+                        .background(Color.orange.opacity(0.1))
+                        .clipShape(Circle())
                 }
-                .padding(.horizontal, DesignSystem.Spacing.s)
-                .padding(.vertical, DesignSystem.Spacing.xs)
-                .background(DesignSystem.Colors.error.opacity(0.1))
-                .cornerRadius(DesignSystem.CornerRadius.small)
+                
+                // 数量显示
+                Text("\(quantity)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.black)
+                    .frame(width: 24)
             }
             
-            // 健康标签
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                if menuItem.isVegan == true {
-                    Label("纯素", systemImage: FoodIcons.organic)
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundColor(DesignSystem.Colors.primary)
-                        .padding(.horizontal, DesignSystem.Spacing.xs)
-                        .padding(.vertical, 2)
-                        .background(DesignSystem.Colors.primaryVeryLight)
-                        .cornerRadius(DesignSystem.CornerRadius.small)
-                } else if menuItem.isVegetarian == true {
-                    Label("素食", systemImage: FoodIcons.healthy)
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundColor(DesignSystem.Colors.primary)
-                        .padding(.horizontal, DesignSystem.Spacing.xs)
-                        .padding(.vertical, 2)
-                        .background(DesignSystem.Colors.primaryVeryLight)
-                        .cornerRadius(DesignSystem.CornerRadius.small)
-                }
-                
-                // 辣度标签
-                if let spicyLevel = menuItem.spicyLevel, spicyLevel != "0" {
-                    HStack(spacing: 2) {
-                        Image(systemName: FoodIcons.spicy)
-                            .foregroundColor(DesignSystem.Colors.accent)
-                        Text("辣度 \(spicyLevel)")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundColor(DesignSystem.Colors.accent)
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.xs)
-                    .padding(.vertical, 2)
-                    .background(DesignSystem.Colors.accentSoft)
-                    .cornerRadius(DesignSystem.CornerRadius.small)
-                }
-                
-                Spacer()
-            }
-        }
-    }
-    
-    // MARK: - Action Buttons
-    
-    private var actionButtonsView: some View {
-        HStack(spacing: DesignSystem.Spacing.m) {
-            // 展开/收起按钮
+            // 加号按钮
             Button(action: {
-                MenuAnimations.performCategoryToggle {
-                    isExpanded.toggle()
-                }
+                onAddToCart?()
             }) {
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(DesignSystem.Typography.caption)
-                    Text(isExpanded ? "收起" : "详情")
-                        .font(DesignSystem.Typography.caption)
-                }
-                .foregroundColor(DesignSystem.Colors.primary)
-                .padding(.horizontal, DesignSystem.Spacing.m)
-                .padding(.vertical, DesignSystem.Spacing.s)
-                .background(DesignSystem.Colors.primaryVeryLight)
-                .cornerRadius(DesignSystem.CornerRadius.small)
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(.orange)
+                    .clipShape(Circle())
+            }
+        }
+    }
+    
+    // MARK: - 购物车动画圆点
+    private var animationDot: some View {
+        Group {
+            if isAnimating {
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 12, height: 12)
+                    .opacity(isAnimating ? 0.0 : 1.0)
+                    .scaleEffect(isAnimating ? 1.5 : 1.0)
+                    .position(x: isAnimating ? UIScreen.main.bounds.width - 44 : 200, y: isAnimating ? 44 : 100)
+                    .animation(.easeInOut(duration: 1.0), value: isAnimating)
+            }
+        }
+    }
+    
+    // MARK: - 标签区域  
+    private var tagsSection: some View {
+        HStack(spacing: 8) {
+            // 素食标签
+            if menuItem.isVegan == true {
+                tagView(text: "纯素", color: .green)
+            } else if menuItem.isVegetarian == true {
+                tagView(text: "素食", color: .green)
+            }
+            
+            // 辣度标签
+            if let spicyLevel = menuItem.spicyLevel, spicyLevel != "0" {
+                tagView(text: "辣度\(spicyLevel)", color: .red)
             }
             
             Spacer()
-            
-            // 添加到购物车按钮
-            Button(action: {
-                MenuAnimations.performButtonPress {
-                    onAddToCart?()
-                }
-            }) {
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Image(systemName: FoodIcons.cart)
-                        .font(DesignSystem.Typography.caption)
-                    Text("加入购物车")
-                        .font(DesignSystem.Typography.captionMedium)
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, DesignSystem.Spacing.m)
-                .padding(.vertical, DesignSystem.Spacing.s)
-                .background(DesignSystem.Colors.primary)
-                .cornerRadius(DesignSystem.CornerRadius.small)
-            }
         }
     }
     
-    private var expandedContentView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Divider()
-            
-            // 图片展示区域
-            if !dishImages.isEmpty {
-                imageExpandedSection
-            }
-            
-            // 详细信息
-            if let description = menuItem.description, !description.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("详细描述")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
-                    
-                    Text(description)
-                        .font(.caption)
-                        .foregroundColor(.primary)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-    }
-    
-    private var imageExpandedSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("参考图片 (\(dishImages.count)张)")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-            
-            if dishImages.count == 1 {
-                // 单张图片大图显示
-                AsyncImage(url: URL(string: dishImages[0].imageURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 200)
-                        .cornerRadius(12)
-                } placeholder: {
-                    ProgressView()
-                        .frame(height: 200)
-                }
-            } else {
-                // 多张图片横向滚动
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(dishImages.enumerated()), id: \.offset) { index, dishImage in
-                            AsyncImage(url: URL(string: dishImage.thumbnailURL)) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                ProgressView()
-                                    .frame(width: 80, height: 80)
-                            }
-                            .frame(width: 80, height: 80)
-                            .clipped()
-                            .cornerRadius(8)
-                            .onTapGesture {
-                                selectedImageIndex = index
-                            }
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(selectedImageIndex == index ? Color.blue : Color.clear, lineWidth: 2)
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func handleCardTap() {
-        onTapCard?()
+    private func tagView(text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.15))
+            .cornerRadius(8)
     }
 }
+
+// MARK: - 其他组件
 
 // MARK: - 正方形菜品图片视图组件
 struct DishSquareImageView: View {
@@ -783,4 +765,106 @@ extension CGSize {
 
 extension CGFloat {
     static let infinity = CGFloat.infinity
+}
+
+// MARK: - 图片缓存管理器
+@MainActor
+class ImageCacheManager: ObservableObject {
+    static let shared = ImageCacheManager()
+    private var cache: [String: UIImage] = [:]
+    private var loadingTasks: [String: Task<UIImage?, Never>] = [:]
+    
+    private init() {}
+    
+    func getImage(for url: String) -> UIImage? {
+        return cache[url]
+    }
+    
+    func loadImage(for url: String) async -> UIImage? {
+        // 如果已经缓存了，直接返回
+        if let cachedImage = cache[url] {
+            return cachedImage
+        }
+        
+        // 如果正在加载，等待现有任务完成
+        if let existingTask = loadingTasks[url] {
+            return await existingTask.value
+        }
+        
+        // 创建新的加载任务
+        let task = Task<UIImage?, Never> {
+            guard let imageUrl = URL(string: url) else { return nil as UIImage? }
+            
+            do {
+                let (data, _) = try await URLSession.shared.data(from: imageUrl)
+                let image = UIImage(data: data)
+                
+                // 缓存图片
+                if let image = image {
+                    cache[url] = image
+                }
+                
+                return image
+            } catch {
+                return nil as UIImage?
+            }
+        }
+        
+        loadingTasks[url] = task
+        let result = await task.value
+        loadingTasks.removeValue(forKey: url)
+        
+        return result
+    }
+}
+
+// MARK: - 缓存图片组件
+struct CachedAsyncImage: View {
+    let url: String
+    let placeholder: AnyView
+    let content: (Image) -> AnyView
+    
+    @StateObject private var cacheManager = ImageCacheManager.shared
+    @State private var image: UIImage?
+    @State private var isLoading = false
+    
+    init(url: String, @ViewBuilder placeholder: () -> some View, @ViewBuilder content: @escaping (Image) -> some View) {
+        self.url = url
+        self.placeholder = AnyView(placeholder())
+        self.content = { image in AnyView(content(image)) }
+    }
+    
+    var body: some View {
+        Group {
+            if let image = image {
+                content(Image(uiImage: image))
+            } else {
+                placeholder
+                    .onAppear {
+                        Task {
+                            await loadImage()
+                        }
+                    }
+            }
+        }
+    }
+    
+    private func loadImage() async {
+        guard !isLoading else { return }
+        isLoading = true
+        
+        // 先检查缓存
+        if let cachedImage = cacheManager.getImage(for: url) {
+            image = cachedImage
+            isLoading = false
+            return
+        }
+        
+        // 加载新图片
+        if let loadedImage = await cacheManager.loadImage(for: url) {
+            image = loadedImage
+        }
+        
+        isLoading = false
+    }
 } 

@@ -80,26 +80,8 @@ struct CameraView: View {
                     }
                 }
                 
-                // 顶部控制栏
+                // 网络状态指示器
                 VStack {
-                    HStack {
-                        Spacer()
-                        
-                        // 右上角：用户设置
-                        NavigationLink(value: "profile") {
-                            Image(systemName: "person.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(.white)
-                                .frame(width: 44, height: 44)
-                                .background(Color.black.opacity(0.4))
-                                .clipShape(Circle())
-                        }
-                        .padding(.trailing, 20)
-                    }
-                    .zIndex(10) // 确保按钮在最上层
-                    .padding(.top, max(geometry.safeAreaInsets.top - 5, 10))
-                    
-                    // 网络状态指示器
                     if offlineManager.isOfflineMode || offlineManager.pendingUploadsCount > 0 {
                         NetworkStatusBanner(offlineManager: offlineManager)
                             .padding(.horizontal, 20)
@@ -200,6 +182,24 @@ struct CameraView: View {
 
             }
         }
+        .safeAreaInset(edge: .top) {
+            HStack {
+                Spacer()
+                
+                // 右上角：用户设置
+                NavigationLink(value: "profile") {
+                    Image(systemName: "person.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.black.opacity(0.4))
+                        .clipShape(Circle())
+                }
+                .padding(.trailing, 20)
+            }
+            .frame(height: 44)
+            .background(Color.clear)
+        }
         .statusBarHidden(true) // 隐藏状态栏以获得沉浸式体验
         .toolbar(.hidden, for: .navigationBar) // 隐藏相机页面的导航栏，但保持导航功能
 
@@ -287,30 +287,15 @@ struct CameraView: View {
         }
         .fullScreenCover(isPresented: $showAnalysisResult) {
             if let result = analysisResult {
-                NavigationView {
-                    CategorizedMenuView(
-                        analysisResult: result,
-                        dishImages: dishImages
-                    )
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("完成") {
-                                showAnalysisResult = false
-                                selectedImage = nil
-                                resetAnalysisState()
-                            }
-                        }
-                        
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("重新拍照") {
-                                showAnalysisResult = false
-                                selectedImage = nil
-                                resetAnalysisState()
-                            }
-                        }
+                CategorizedMenuView(
+                    analysisResult: result,
+                    dishImages: dishImages,
+                    onDismiss: {
+                        showAnalysisResult = false
+                        selectedImage = nil
+                        resetAnalysisState()
                     }
-                }
+                )
             }
         }
         .overlay {

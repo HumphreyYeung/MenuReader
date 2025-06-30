@@ -54,7 +54,7 @@ struct MenuItem: Identifiable, Codable {
 struct CartItem: Identifiable, Codable {
     let id = UUID()
     let menuItem: MenuItem
-    let quantity: Int
+    var quantity: Int  // 改为var使其可以修改
     let addedAt: Date
     
     enum CodingKeys: String, CodingKey {

@@ -128,28 +128,14 @@ struct PhotoPreviewView: View {
         .statusBarHidden(true)
         .fullScreenCover(isPresented: $showAnalysisResult) {
             if let result = analysisResult {
-                NavigationView {
-                    CategorizedMenuView(
-                        analysisResult: result,
-                        dishImages: dishImages
-                    )
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("完成") {
-                                showAnalysisResult = false
-                                onRetake() // 关闭预览页面
-                            }
-                        }
-                        
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("重新拍照") {
-                                showAnalysisResult = false
-                                onRetake() // 回到相机
-                            }
-                        }
+                CategorizedMenuView(
+                    analysisResult: result,
+                    dishImages: dishImages,
+                    onDismiss: {
+                        showAnalysisResult = false
+                        onRetake()
                     }
-                }
+                )
             }
         }
     }
