@@ -3,15 +3,38 @@ import SwiftUI
 /// Task007: 分类菜单显示界面
 @MainActor
 struct CategorizedMenuView: View {
+    // MARK: - Properties
     let analysisResult: MenuAnalysisResult
     let dishImages: [String: [DishImage]]
-    let onDismiss: (() -> Void)?
+    private let navigationMode: NavigationMode
     
+    // 兼容性初始化器（保持向后兼容）
+    init(analysisResult: MenuAnalysisResult, 
+         dishImages: [String: [DishImage]], 
+         onDismiss: (() -> Void)? = nil) {
+        self.analysisResult = analysisResult
+        self.dishImages = dishImages
+        
+        if let dismiss = onDismiss {
+            self.navigationMode = .modal(onDismiss: dismiss)
+        } else {
+            self.navigationMode = .push
+        }
+    }
+    
+    // 明确的初始化器
+    init(analysisResult: MenuAnalysisResult, 
+         dishImages: [String: [DishImage]], 
+         navigationMode: NavigationMode) {
+        self.analysisResult = analysisResult
+        self.dishImages = dishImages
+        self.navigationMode = navigationMode
+    }
+    
+    @EnvironmentObject var cartManager: CartManager
     @State private var searchText = ""
     @State private var selectedCategory: String? = nil
     @State private var isRefreshing = false
-    @State private var cartItems: [CartItem] = []
-    @State private var showingCart = false
     @FocusState private var isSearchFocused: Bool
     @State private var animatingItems: [String: Bool] = [:]
     
@@ -54,37 +77,52 @@ struct CategorizedMenuView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // 统一的导航栏
-            HStack(alignment: .center) {
-                // 左侧返回按钮
-                Button(action: {
-                    onDismiss?()
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.black)
+            // 固定的搜索和过滤栏
+            searchAndFilterSection
+            
+            // 可刷新的主要内容区域
+            if categorizedItems.isEmpty {
+                emptyStateView
+                    .refreshable {
+                        await refreshMenu()
+                    }
+            } else {
+                menuContentView
+                    .refreshable {
+                        await refreshMenu()
+                    }
+            }
+        }
+        .background(AppColors.background)
+        .onTapGesture {
+            // 点击页面其他地方隐藏键盘
+            isSearchFocused = false
+        }
+        .navigationTitle("Menu")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // 只在模态展示时显示自定义关闭按钮
+            if case .modal(let onDismiss) = navigationMode {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: {
+                        onDismiss()
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(AppColors.primary)
+                    }
                 }
-                .frame(width: 44, height: 44)
-                
-                Spacer()
-                
-                // 中间标题
-                Text("Menu")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.black)
-                
-                Spacer()
-                
-                // 右侧购物车按钮
-                Button(action: {
-                    showingCart = true
-                }) {
+            }
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                // 右侧购物车按钮 - 使用NavigationLink导航到购物车
+                NavigationLink(value: "cart") {
                     ZStack {
                         Image(systemName: "cart")
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: 18, weight: .medium))
                             .foregroundColor(.black)
                         
-                        let totalQuantity = cartItems.reduce(0) { $0 + $1.quantity }
+                        let totalQuantity = cartManager.cartItems.reduce(0) { $0 + $1.quantity }
                         if totalQuantity > 0 {
                             Text("\(totalQuantity)")
                                 .font(.system(size: 12, weight: .bold))
@@ -96,73 +134,45 @@ struct CategorizedMenuView: View {
                         }
                     }
                 }
-                .frame(width: 44, height: 44)
-            }
-            .padding(.horizontal, 20)
-            .frame(height: 44)
-            .background(Color(red: 0.97, green: 0.96, blue: 0.95))
-            
-            // 页面内容
-            VStack(spacing: 0) {
-                // 搜索和过滤栏
-                searchAndFilterSection
-                
-                // 主要内容
-                if categorizedItems.isEmpty {
-                    emptyStateView
-                } else {
-                    menuContentView
-                }
-            }
-            .background(Color(red: 0.97, green: 0.96, blue: 0.95))
-            .refreshable {
-                await refreshMenu()
-            }
-            .onTapGesture {
-                // 点击页面其他地方隐藏键盘
-                isSearchFocused = false
+                .padding(.trailing, 8)
             }
         }
-        .sheet(isPresented: $showingCart) {
-            CartView(cartItems: $cartItems)
-        }
-        .preferredColorScheme(.light)
     }
     
     // MARK: - Search and Filter Section
     
     private var searchAndFilterSection: some View {
-        VStack(spacing: 16) {  // 减少搜索栏和标签栏的间距为16pt
+        VStack(spacing: AppSpacing.m) {
             // 搜索栏 - 使用与卡片相同的宽度
-            HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                    .font(.system(size: 16))
+            HStack(spacing: AppSpacing.s) {
+                Image(systemName: AppIcons.search)
+                    .foregroundColor(AppColors.secondaryText)
+                    .font(AppFonts.body)
                 
                 TextField("search...", text: $searchText)
-                    .font(.system(size: 16))
-                    .foregroundColor(.black)
+                    .font(AppFonts.body)
+                    .foregroundColor(AppColors.primary)
                     .focused($isSearchFocused)
                 
                 if !searchText.isEmpty {
                     Button(action: {
                         searchText = ""
                     }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
-                            .font(.system(size: 16))
+                        Image(systemName: AppIcons.close)
+                            .foregroundColor(AppColors.secondaryText)
+                            .font(AppFonts.body)
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.white)
-            .cornerRadius(12)
+            .padding(.horizontal, AppSpacing.m)
+            .padding(.vertical, AppSpacing.s)
+            .background(AppColors.contentBackground)
+            .cornerRadius(AppSpacing.standardCorner)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: AppSpacing.standardCorner)
+                    .stroke(AppColors.separator, lineWidth: 1)
             )
-            .padding(.horizontal, 20)  // 与卡片保持相同的水平padding
+            .padding(.horizontal, AppSpacing.screenMargin)
             
             // 分类过滤标签 - 固定All标签，其他标签可滑动
             if !allCategories.isEmpty {
@@ -172,65 +182,68 @@ struct CategorizedMenuView: View {
                         selectedCategory = nil
                     }) {
                         Text("All")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(selectedCategory == nil ? .white : .black)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(selectedCategory == nil ? .black : Color.clear)
-                            .cornerRadius(20)
+                            .font(AppFonts.smallButton)
+                            .foregroundColor(selectedCategory == nil ? AppColors.buttonText : AppColors.primary)
+                            .padding(.horizontal, AppSpacing.s)
+                            .padding(.vertical, AppSpacing.xs)
+                            .background(selectedCategory == nil ? AppColors.primary : Color.clear)
+                            .cornerRadius(AppSpacing.xxl)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: selectedCategory == nil ? 0 : 1)
+                                RoundedRectangle(cornerRadius: AppSpacing.xxl)
+                                    .stroke(AppColors.separator, lineWidth: selectedCategory == nil ? 0 : 1)
                             )
                     }
-                    .padding(.leading, 20)  // 左侧padding
-                    .padding(.trailing, 8)  // 与滑动标签的间距
+                    .padding(.leading, AppSpacing.screenMargin)
+                    .padding(.trailing, AppSpacing.xs)
                     
-                    // 可滑动的分类标签
+                    // 可滑动的分类标签 - 严格限制为水平滚动
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: AppSpacing.xs) {
                             ForEach(allCategories, id: \.self) { category in
                                 Button(action: {
                                     selectedCategory = selectedCategory == category ? nil : category
                                 }) {
                                     Text(category)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(selectedCategory == category ? .white : .black)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(selectedCategory == category ? .black : Color.clear)
-                                        .cornerRadius(20)
+                                        .font(AppFonts.smallButton)
+                                        .foregroundColor(selectedCategory == category ? AppColors.buttonText : AppColors.primary)
+                                        .padding(.horizontal, AppSpacing.s)
+                                        .padding(.vertical, AppSpacing.xs)
+                                        .background(selectedCategory == category ? AppColors.primary : Color.clear)
+                                        .cornerRadius(AppSpacing.xxl)
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 20)
-                                                .stroke(Color.gray.opacity(0.3), lineWidth: selectedCategory == category ? 0 : 1)
+                                            RoundedRectangle(cornerRadius: AppSpacing.xxl)
+                                                .stroke(AppColors.separator, lineWidth: selectedCategory == category ? 0 : 1)
                                         )
                                 }
                             }
                         }
-                        .padding(.trailing, 20)  // 右侧padding
+                        .padding(.trailing, AppSpacing.screenMargin)
                     }
+                    .frame(height: 40)
+                    .clipped()
+                    .scrollDisabled(false) // 明确允许水平滚动
+                    .background(Color.clear) // 阻止背景交互
                 }
-                .frame(height: 44)  // 统一标签栏高度
-                .padding(.vertical, 2)  // 减少标签栏上下padding为2pt
+                .frame(height: 40)
             }
         }
-        .padding(.top, 16)  // 保留顶部16pt间距
-        .padding(.bottom, 16)  // 减少底部间距为16pt
-        .background(Color(red: 0.97, green: 0.96, blue: 0.95))
+        .padding(.top, AppSpacing.s)
+        .padding(.bottom, AppSpacing.m)
+        .background(AppColors.background)
     }
     
     // MARK: - Menu Content
     
     private var menuContentView: some View {
         ScrollView {
-            LazyVStack(spacing: 16) {  // 增加卡片之间的间距
+            LazyVStack(spacing: AppSpacing.m) {  // 增加卡片之间的间距
                 ForEach(categorizedItems.keys.sorted(), id: \.self) { category in
                     if let items = categorizedItems[category], !items.isEmpty {
                         CategorySectionView(
                             category: category,
                             items: items,
                             dishImages: dishImages,
-                            cartItems: $cartItems,
+                            cartItems: $cartManager.cartItems,
                             animatingItems: $animatingItems,
                             onAddToCart: { menuItem in
                                 addToCart(menuItem)
@@ -239,29 +252,29 @@ struct CategorizedMenuView: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)  // 统一使用20的水平padding
+            .padding(.horizontal, AppSpacing.screenMargin)  // 与搜索框和其他页面保持一致的水平padding
             .padding(.top, 0)  // 移除顶部间距，避免与searchAndFilterSection叠加
             .padding(.bottom, 100) // 为底部购物车按钮留空间
         }
-        .background(Color(red: 0.97, green: 0.96, blue: 0.95))
+        .background(AppColors.background)
     }
     
     // MARK: - Empty State
     
     private var emptyStateView: some View {
-        VStack(spacing: DesignSystem.Spacing.l) {
+        VStack(spacing: AppSpacing.l) {
             Image(systemName: FoodIcons.search)
                 .font(.system(size: 60))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .foregroundColor(AppColors.tertiaryText)
             
             Text("没有找到菜品")
-                .font(DesignSystem.Typography.title2)
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFonts.title1)
+                .foregroundColor(AppColors.primary)
             
             if !searchText.isEmpty {
                 Text("尝试调整搜索条件")
-                    .font(DesignSystem.Typography.body)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFonts.body)
+                    .foregroundColor(AppColors.secondaryText)
                 
                 Button("清除搜索") {
                     searchText = ""
@@ -270,12 +283,12 @@ struct CategorizedMenuView: View {
                 .secondaryButtonStyle()
             } else {
                 Text("菜单识别结果为空")
-                    .font(DesignSystem.Typography.body)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFonts.body)
+                    .foregroundColor(AppColors.secondaryText)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.97, green: 0.96, blue: 0.95))
+        .background(AppColors.background)
     }
     
     // MARK: - Methods
@@ -298,13 +311,8 @@ struct CategorizedMenuView: View {
             imageResults: dishImages[menuItem.originalName]?.map { $0.imageURL } ?? []
         )
         
-        // 查找是否已存在相同菜品
-        if let existingIndex = cartItems.firstIndex(where: { $0.menuItem.originalName == menuItem.originalName }) {
-            cartItems[existingIndex].quantity += 1
-        } else {
-            let cartItem = CartItem(menuItem: menuItemForCart, quantity: 1)
-            cartItems.append(cartItem)
-        }
+        // 添加到购物车
+        cartManager.addItem(menuItemForCart)
         
         // 添加触觉反馈
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
@@ -319,11 +327,11 @@ struct CategorizedMenuView: View {
     }
     
     private func removeFromCart(_ menuItem: MenuItemAnalysis) {
-        if let existingIndex = cartItems.firstIndex(where: { $0.menuItem.originalName == menuItem.originalName }) {
-            if cartItems[existingIndex].quantity > 1 {
-                cartItems[existingIndex].quantity -= 1
+        if let existingIndex = cartManager.cartItems.firstIndex(where: { $0.menuItem.originalName == menuItem.originalName }) {
+            if cartManager.cartItems[existingIndex].quantity > 1 {
+                cartManager.cartItems[existingIndex].quantity -= 1
             } else {
-                cartItems.remove(at: existingIndex)
+                cartManager.cartItems.remove(at: existingIndex)
             }
         }
     }
@@ -350,7 +358,7 @@ struct CategorySectionView: View {
     
     var body: some View {
         // 直接显示菜品卡片列表，不显示分类标题
-        LazyVStack(spacing: 16) {  // 统一卡片间距
+        LazyVStack(spacing: AppSpacing.m) {  // 统一卡片间距
             ForEach(items) { item in
                 UnifiedDishCard(
                     menuItem: item,
@@ -409,107 +417,198 @@ struct CategoryFilterButton: View {
     }
 }
 
+// MARK: - Price Parsing Helper
+
+private struct PriceInfo {
+    let amount: Double
+    let unit: String
+    let isPrefix: Bool
+
+    static func parse(from priceString: String) -> PriceInfo? {
+        let trimmed = priceString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Regex to find prefix, amount, and suffix.
+        // It captures (non-digits) (digits and dots) (non-digits)
+        let pattern = #"^([^\d.]*)\s*([\d.]+)\s*([^\d.]*)$"#
+        
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: trimmed, options: [], range: NSRange(location: 0, length: trimmed.utf16.count)) else {
+            return nil
+        }
+        
+        // Extract amount string
+        guard let amountRange = Range(match.range(at: 2), in: trimmed),
+              let amount = Double(trimmed[amountRange]) else {
+            return nil
+        }
+        
+        // Extract prefix and suffix units
+        let prefixUnit = Range(match.range(at: 1), in: trimmed).map { String(trimmed[$0]) } ?? ""
+        let suffixUnit = Range(match.range(at: 3), in: trimmed).map { String(trimmed[$0]) } ?? ""
+        
+        if !prefixUnit.isEmpty {
+            return PriceInfo(amount: amount, unit: prefixUnit, isPrefix: true)
+        } else {
+            return PriceInfo(amount: amount, unit: suffixUnit, isPrefix: false)
+        }
+    }
+}
+
 // MARK: - Cart View
 
 struct CartView: View {
     @Binding var cartItems: [CartItem]
     @Environment(\.dismiss) private var dismiss
     
+    private var priceDisplayFormat: (unit: String, isPrefix: Bool) {
+        // Find the first item with a valid price to determine the format for the total.
+        for item in cartItems {
+            if let priceString = item.menuItem.price, let info = PriceInfo.parse(from: priceString) {
+                // If a unit is found, use its format.
+                if !info.unit.isEmpty {
+                    return (unit: info.unit, isPrefix: info.isPrefix)
+                }
+            }
+        }
+        // Fallback if no prices have units or cart is empty.
+        // Defaulting to a common format.
+        return (unit: "元", isPrefix: false)
+    }
+    
     var totalPrice: String {
-        let total = cartItems.compactMap { item in
-            // 简单的价格解析（假设格式为 ¥XX 或 $XX）
-            let priceString = item.menuItem.price ?? "¥0"
-            let numberString = priceString.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
-            let price = Double(numberString) ?? 0.0
-            return price * Double(item.quantity)  // 乘以数量
-        }.reduce(0.0) { $0 + $1 }
+        let totalAmount = cartItems.reduce(0.0) { sum, item in
+            guard let priceString = item.menuItem.price,
+                  let info = PriceInfo.parse(from: priceString) else {
+                return sum
+            }
+            return sum + (info.amount * Double(item.quantity))
+        }
         
-        return "¥\(String(format: "%.0f", total))"
+        let format = priceDisplayFormat
+        
+        // Format amount, showing decimals only if necessary.
+        let formattedAmount: String
+        if totalAmount.truncatingRemainder(dividingBy: 1) == 0 {
+            formattedAmount = String(format: "%.0f", totalAmount)
+        } else {
+            formattedAmount = String(format: "%.2f", totalAmount)
+        }
+        
+        return format.isPrefix ? "\(format.unit)\(formattedAmount)" : "\(formattedAmount)\(format.unit)"
+    }
+    
+    var totalQuantity: Int {
+        cartItems.reduce(0) { $0 + $1.quantity }
     }
     
     var body: some View {
-        NavigationView {
-            VStack {
+        VStack(spacing: 0) {
+            // 页面内容
+            VStack(spacing: 0) {
                 if cartItems.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "cart")
+                    // 空购物车状态
+                    VStack(spacing: 20) {
+                        Spacer()
+                        
+                        Image(systemName: FoodIcons.cart)
                             .font(.system(size: 60))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.tertiaryText)
                         
                         Text("购物车为空")
-                            .font(.title2)
+                            .font(AppFonts.title1)
                             .fontWeight(.semibold)
+                            .foregroundColor(AppColors.primary)
                         
                         Text("添加一些美味的菜品吧！")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.secondaryText)
+                        
+                        Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppColors.background)
                 } else {
-                    List {
-                        ForEach(cartItems) { item in
-                            CartItemRow(cartItem: item)
+                    // 购物车内容
+                    ScrollView {
+                        LazyVStack(spacing: AppSpacing.m) {
+                            ForEach(cartItems.indices, id: \.self) { index in
+                                CartItemRow(
+                                    cartItem: cartItems[index],
+                                    onQuantityChange: { newQuantity in
+                                        if newQuantity <= 0 {
+                                            cartItems.remove(at: index)
+                                        } else {
+                                            cartItems[index].quantity = newQuantity
+                                        }
+                                    }
+                                )
+                            }
                         }
-                        .onDelete(perform: deleteItems)
+                        .padding(.horizontal, AppSpacing.screenMargin)
+                        .padding(.top, AppSpacing.m)
+                        .padding(.bottom, 120) // 为底部总价区域预留空间
                     }
                     
-                    // 底部总价和结账按钮
-                    VStack(spacing: 16) {
-                        HStack {
-                            Text("总计:")
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                            
-                            Spacer()
+                    Spacer()
+                }
+            }
+            .background(AppColors.background)
+            
+            // 底部总价区域 - 固定在底部
+            if !cartItems.isEmpty {
+                VStack(spacing: AppSpacing.m) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                            Text("总计")
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.secondaryText)
                             
                             Text(totalPrice)
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
+                                .font(AppFonts.title1)
+                                .foregroundColor(AppColors.primary)
                         }
-                        .padding(.horizontal)
+                        
+                        Spacer()
                         
                         Button(action: {
                             // 结账逻辑
                         }) {
-                            Text("结账")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .cornerRadius(12)
+                            Text("Show to Servants")
+                                .font(AppFonts.button)
+                                .foregroundColor(AppColors.buttonText)
+                                .frame(width: 140, height: 44)
+                                .background(AppColors.accent)
+                                .cornerRadius(AppSpacing.standardCorner)
                         }
-                        .padding(.horizontal)
                     }
-                    .padding(.vertical)
-                    .background(Color(.systemBackground))
+                    .padding(.horizontal, AppSpacing.screenMargin)
                 }
+                .padding(.vertical, AppSpacing.l)
+                .background(AppColors.background)
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: -2)
             }
-            .navigationTitle("购物车")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("关闭") {
-                        dismiss()
-                    }
-                }
-                
+        }
+        .navigationTitle("Cart")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
                 if !cartItems.isEmpty {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("清空") {
-                            cartItems.removeAll()
+                    Button(action: {
+                        cartItems.removeAll()
+                    }) {
+                        HStack(spacing: 3) {
+                            Text("Clear All")
+                                .font(AppFonts.smallButton)
+                            Text("(\(totalQuantity))")
+                                .font(AppFonts.smallButton.weight(.bold))
                         }
-                        .foregroundColor(.red)
+                        .foregroundColor(AppColors.error)
                     }
+                    .padding(.trailing, AppSpacing.xs)
                 }
             }
         }
-    }
-    
-    private func deleteItems(offsets: IndexSet) {
-        cartItems.remove(atOffsets: offsets)
     }
 }
 
@@ -517,56 +616,119 @@ struct CartView: View {
 
 struct CartItemRow: View {
     let cartItem: CartItem
+    let onQuantityChange: (Int) -> Void
+    
+    private var formattedPrice: String {
+        guard let priceString = cartItem.menuItem.price else { return "" }
+        
+        // Use the same parsing logic to format the individual item's price.
+        if let info = PriceInfo.parse(from: priceString) {
+            let formattedAmount: String
+            if info.amount.truncatingRemainder(dividingBy: 1) == 0 {
+                formattedAmount = String(format: "%.0f", info.amount)
+            } else {
+                formattedAmount = String(format: "%.2f", info.amount)
+            }
+            return info.isPrefix ? "\(info.unit)\(formattedAmount)" : "\(formattedAmount)\(info.unit)"
+        }
+        
+        // Fallback to the original string if parsing fails.
+        return priceString
+    }
     
     var body: some View {
         HStack(spacing: 12) {
-            // 菜品图片
+            // 正方形菜品图片
             AsyncImage(url: URL(string: cartItem.menuItem.imageURL ?? "")) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } placeholder: {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.gray.opacity(0.2))
+                RoundedRectangle(cornerRadius: AppSpacing.standardCorner)
+                    .fill(AppColors.lightBackground)
                     .overlay {
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray)
+                        Image(systemName: "fork.knife")
+                            .font(.system(size: 24))
+                            .foregroundColor(AppColors.tertiaryText)
                     }
             }
-            .frame(width: 60, height: 60)
+            .frame(width: 80, height: 80)
             .clipped()
-            .cornerRadius(8)
+            .cornerRadius(AppSpacing.standardCorner)
             
-            // 菜品信息
-            VStack(alignment: .leading, spacing: 4) {
+            // 菜品信息区域 - 使用更明确的布局控制
+            VStack(alignment: .leading, spacing: 6) {
+                // 原始名称
                 Text(cartItem.menuItem.originalName)
-                    .font(.headline)
+                    .font(AppFonts.headline)
+                    .foregroundColor(AppColors.primary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 
+                // 翻译名称
                 if let translatedName = cartItem.menuItem.translatedName {
                     Text(translatedName)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(AppFonts.subheadline)
+                        .foregroundColor(AppColors.secondaryText)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
                 
-                if let price = cartItem.menuItem.price {
-                    Text(price)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.green)
+                // 价格
+                if cartItem.menuItem.price != nil {
+                    Text(formattedPrice)
+                        .font(AppFonts.headline.weight(.semibold))
+                        .foregroundColor(AppColors.accent)
                 }
+                
+                Spacer()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             
-            Spacer()
-            
-            // 数量
-            Text("x\(cartItem.quantity)")
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
+            // 增删控件 - 缩小尺寸以节省空间
+            VStack(spacing: 8) {
+                Spacer()
+                
+                HStack(spacing: 8) {
+                    // 减少按钮
+                    Button(action: {
+                        onQuantityChange(cartItem.quantity - 1)
+                    }) {
+                        Image(systemName: "minus")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppColors.buttonText)
+                            .frame(width: 24, height: 24)
+                            .background(AppColors.secondaryText)
+                            .clipShape(Circle())
+                    }
+                    
+                    // 数量显示
+                    Text("\(cartItem.quantity)")
+                        .font(AppFonts.subheadline.weight(.semibold))
+                        .foregroundColor(AppColors.primary)
+                        .frame(minWidth: 16)
+                    
+                    // 增加按钮
+                    Button(action: {
+                        onQuantityChange(cartItem.quantity + 1)
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppColors.buttonText)
+                            .frame(width: 24, height: 24)
+                            .background(AppColors.accent)
+                            .clipShape(Circle())
+                    }
+                }
+                
+                Spacer()
+            }
+            .frame(width: 80)
         }
-        .padding(.vertical, 4)
+        .padding(AppSpacing.m)
+        .background(AppColors.contentBackground)
+        .cornerRadius(AppSpacing.largeCorner)
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
     }
 }
 
@@ -581,4 +743,19 @@ struct CartItemRow: View {
         dishImages: sampleImages,
         onDismiss: nil
     )
+}
+
+// MARK: - Navigation Mode
+enum NavigationMode: Equatable {
+    case modal(onDismiss: () -> Void)    // 模态展示，需要关闭按钮
+    case push                            // 导航栈推送，使用系统返回按钮
+    
+    static func == (lhs: NavigationMode, rhs: NavigationMode) -> Bool {
+        switch (lhs, rhs) {
+        case (.modal, .modal), (.push, .push):
+            return true
+        default:
+            return false
+        }
+    }
 } 

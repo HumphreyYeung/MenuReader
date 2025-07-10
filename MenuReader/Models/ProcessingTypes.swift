@@ -105,22 +105,27 @@ struct GoogleSearchInformation: Codable {
 // MARK: - Menu Process Result (for NetworkService compatibility)
 // Note: MenuItem is defined in MenuItem.swift
 struct MenuProcessResult: Codable, Identifiable, Hashable {
-    let id: UUID
-    let items: [MenuItemAnalysis]
-    let scanDate: Date
-    let isFavorite: Bool
-    let thumbnailData: Data? // Compressed image data for thumbnail
+    public var id: UUID
+    var scanDate: Date
+    var thumbnailData: Data?
+    var items: [MenuItemAnalysis]
+    var dishImages: [String: [DishImage]]? // 存储菜品图片，可选以兼容旧数据
     
-    enum CodingKeys: String, CodingKey {
-        case id, items, scanDate, isFavorite, thumbnailData
+    // 实现Hashable协议，确保NavigationLink可用
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
     
-    init(items: [MenuItemAnalysis], scanDate: Date = Date(), isFavorite: Bool = false, thumbnailData: Data? = nil, id: UUID = UUID()) {
+    static func == (lhs: MenuProcessResult, rhs: MenuProcessResult) -> Bool {
+        lhs.id == rhs.id
+    }
+    
+    init(id: UUID = UUID(), scanDate: Date = Date(), thumbnailData: Data? = nil, items: [MenuItemAnalysis], dishImages: [String : [DishImage]]? = nil) {
         self.id = id
-        self.items = items
         self.scanDate = scanDate
-        self.isFavorite = isFavorite
         self.thumbnailData = thumbnailData
+        self.items = items
+        self.dishImages = dishImages
     }
 }
 

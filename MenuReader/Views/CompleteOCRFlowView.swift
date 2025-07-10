@@ -524,9 +524,16 @@ struct CompleteOCRFlowView: View {
             return
         }
         
+        // 将图片转换为缩略图数据
+        let thumbnailData = image.jpegData(compressionQuality: 0.3)
+        
         // 创建MenuProcessResult并保存到历史记录
-        let processResult = MenuProcessResult(items: result.items)
-        StorageService.shared.saveMenuHistory(processResult, originalImage: image)
+        let processResult = MenuProcessResult(
+            thumbnailData: thumbnailData,
+            items: result.items,
+            dishImages: dishImages
+        )
+        StorageService.shared.saveMenuHistory(processResult)
         
         print("✅ [CompleteOCRFlowView] 已保存到历史记录")
     }

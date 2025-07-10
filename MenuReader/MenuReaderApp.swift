@@ -10,8 +10,13 @@ import SwiftUI
 @main
 struct MenuReaderApp: App {
     @State private var showOnboarding = true
+    @StateObject private var cartManager = CartManager.shared
     
     init() {
+        // 全局配置返回按钮，只显示图标，不显示文字
+        let backButtonAppearance = UIBarButtonItem.appearance()
+        backButtonAppearance.setBackButtonTitlePositionAdjustment(UIOffset(horizontal: -1000, vertical: 0), for: .default)
+
         // 初始化网络监控和离线管理
         _ = NetworkMonitor.shared
         _ = OfflineManager.shared
@@ -30,19 +35,23 @@ struct MenuReaderApp: App {
                         .transition(.opacity)
                         .animation(.easeInOut(duration: 0.5), value: showOnboarding)
                 }
-            }
-            .navigationDestination(for: String.self) { destination in
-                switch destination {
-                case "history":
-                    HistoryView()
-                case "profile":
-                    ProfileView()
-                default:
-                    EmptyView()
                 }
+                .navigationDestination(for: String.self) { destination in
+                    switch destination {
+                    case "history":
+                        HistoryView()
+                    case "profile":
+                        ProfileView()
+                    case "cart":
+                        CartView(cartItems: $cartManager.cartItems)
+                    default:
+                        EmptyView()
+                    }
+                }
+                .tint(AppColors.primary)
             }
-            .preferredColorScheme(.dark) // 统一使用深色主题避免切换闪烁
-            }
+            .environmentObject(cartManager)
+            .preferredColorScheme(.light)
         }
     }
 }

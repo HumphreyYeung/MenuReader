@@ -13,6 +13,7 @@ struct CameraView: View {
     @StateObject private var permissionManager = PermissionManager.shared
     @StateObject private var menuAnalysisService = MenuAnalysisService.shared
     @StateObject private var offlineManager = OfflineManager.shared
+    @EnvironmentObject var cartManager: CartManager
     
     @State private var showPhotoLibrary = false
     @State private var showImagePreview = false
@@ -287,15 +288,26 @@ struct CameraView: View {
         }
         .fullScreenCover(isPresented: $showAnalysisResult) {
             if let result = analysisResult {
-                CategorizedMenuView(
-                    analysisResult: result,
-                    dishImages: dishImages,
-                    onDismiss: {
-                        showAnalysisResult = false
-                        selectedImage = nil
-                        resetAnalysisState()
+                NavigationStack {
+                    CategorizedMenuView(
+                        analysisResult: result,
+                        dishImages: dishImages,
+                        onDismiss: {
+                            showAnalysisResult = false
+                            selectedImage = nil
+                            resetAnalysisState()
+                        }
+                    )
+                    .navigationDestination(for: String.self) { destination in
+                        switch destination {
+                        case "cart":
+                            CartView(cartItems: $cartManager.cartItems)
+                        default:
+                            EmptyView()
+                        }
                     }
-                )
+                }
+                .environmentObject(cartManager)
             }
         }
         .overlay {
@@ -576,11 +588,18 @@ struct CameraView: View {
     private func saveMenuToHistory(result: MenuAnalysisResult, originalImage: UIImage) {
         print("💾 开始保存菜单到历史记录...")
         
-        // 创建MenuProcessResult
-        let processResult = MenuProcessResult(items: result.items)
+        // 将图片转换为缩略图数据
+        let thumbnailData = originalImage.jpegData(compressionQuality: 0.3)
+        
+        // 创建MenuProcessResult，包含缩略图数据
+        let processResult = MenuProcessResult(
+            thumbnailData: thumbnailData,
+            items: result.items,
+            dishImages: dishImages
+        )
         
         // 使用OfflineManager保存，它会根据网络状态决定是否加入队列
-        offlineManager.saveMenuResult(processResult, originalImage: originalImage)
+        offlineManager.saveMenuResult(processResult)
         
         print("✅ 菜单已保存到历史记录，包含 \(result.items.count) 个菜品")
     }

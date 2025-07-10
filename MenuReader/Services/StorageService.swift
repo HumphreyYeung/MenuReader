@@ -2,7 +2,7 @@
 //  StorageService.swift
 //  MenuReader
 //
-//  Created by Humphrey Yeung on 6/10/25.
+//  Created by Humphrey Yeung on 2025-01-16.
 //
 
 import Foundation
@@ -17,10 +17,8 @@ protocol StorageServiceProtocol {
     func loadCartItems() -> [CartItem]
     func clearCart()
     func saveMenuHistory(_ result: MenuProcessResult)
-    func saveMenuHistory(_ result: MenuProcessResult, originalImage: UIImage?)
     func loadMenuHistory() -> [MenuProcessResult]
     func deleteMenuHistoryItem(withId id: UUID)
-    func toggleFavoriteHistoryItem(withId id: UUID)
     func getMenuHistoryPaginated(page: Int, pageSize: Int) -> [MenuProcessResult]
     func getMenuHistoryCount() -> Int
     
@@ -101,28 +99,9 @@ class StorageService: ObservableObject, StorageServiceProtocol, @unchecked Senda
     
     // MARK: - Menu History
     func saveMenuHistory(_ result: MenuProcessResult) {
-        saveMenuHistory(result, originalImage: nil)
-    }
-    
-    func saveMenuHistory(_ result: MenuProcessResult, originalImage: UIImage?) {
-        var updatedResult = result
-        
-        // Generate thumbnail if original image is provided
-        if let image = originalImage, result.thumbnailData == nil {
-            let thumbnailData = ImageUtils.generateThumbnailData(from: image)
-            updatedResult = MenuProcessResult(
-                items: result.items,
-                scanDate: result.scanDate,
-                isFavorite: result.isFavorite,
-                thumbnailData: thumbnailData,
-                id: result.id
-            )
-        }
-        
         var history = loadMenuHistory()
-        history.insert(updatedResult, at: 0) // Add to beginning
+        history.insert(result, at: 0) // Add to beginning
         
-        // Remove 50-item limit as requested - keep all items
         do {
             let data = try encoder.encode(history)
             userDefaults.set(data, forKey: Keys.menuHistory)
@@ -148,28 +127,6 @@ class StorageService: ObservableObject, StorageServiceProtocol, @unchecked Senda
             userDefaults.set(data, forKey: Keys.menuHistory)
         } catch {
             print("Failed to delete menu history item: \(error)")
-        }
-    }
-    
-    func toggleFavoriteHistoryItem(withId id: UUID) {
-        var history = loadMenuHistory()
-        
-        if let index = history.firstIndex(where: { $0.id == id }) {
-            let item = history[index]
-            history[index] = MenuProcessResult(
-                items: item.items,
-                scanDate: item.scanDate,
-                isFavorite: !item.isFavorite,
-                thumbnailData: item.thumbnailData,
-                id: item.id
-            )
-        }
-        
-        do {
-            let data = try encoder.encode(history)
-            userDefaults.set(data, forKey: Keys.menuHistory)
-        } catch {
-            print("Failed to toggle favorite menu history item: \(error)")
         }
     }
     
@@ -260,25 +217,25 @@ class StorageService: ObservableObject, StorageServiceProtocol, @unchecked Senda
     }
     
     func cleanupOldData(keepRecentDays: Int = 30) {
-        let cutoffDate = Date().addingTimeInterval(-TimeInterval(keepRecentDays * 24 * 60 * 60))
-        var history = loadMenuHistory()
-        let originalCount = history.count
+        // 1. 获取所有历史记录
+        let history = loadMenuHistory()
         
-        // 保留最近的数据和收藏的数据
-        history = history.filter { result in
-            result.scanDate > cutoffDate || result.isFavorite
+        // 2. 计算截止日期
+        guard let cutoffDate = Calendar.current.date(byAdding: .day, value: -keepRecentDays, to: Date()) else {
+            print("❌ [StorageService] 无法计算截止日期")
+            return
         }
         
-        let removedCount = originalCount - history.count
+        // 3. 过滤需要保留的项
+        let itemsToKeep = history.filter { $0.scanDate >= cutoffDate }
         
-        if removedCount > 0 {
-            do {
-                let data = try encoder.encode(history)
-                userDefaults.set(data, forKey: Keys.menuHistory)
-                print("🧹 [StorageService] 清理完成，移除了 \(removedCount) 条旧记录")
-            } catch {
-                print("❌ [StorageService] 清理数据失败: \(error)")
-            }
+        // 4. 保存过滤后的历史记录
+        do {
+            let data = try encoder.encode(itemsToKeep)
+            userDefaults.set(data, forKey: Keys.menuHistory)
+            print("✅ [StorageService] 已清理旧数据，保留了最近 \(keepRecentDays) 天的 \(itemsToKeep.count) 条记录")
+        } catch {
+            print("❌ [StorageService] 保存清理后的历史记录失败: \(error)")
         }
     }
     
@@ -290,12 +247,5 @@ class StorageService: ObservableObject, StorageServiceProtocol, @unchecked Senda
     func setMaxStorageLimit(_ limit: Int64) {
         userDefaults.set(limit, forKey: Keys.maxStorageLimit)
         print("📏 [StorageService] 存储限制已设置为: \(limit / 1024 / 1024)MB")
-        
-        // 检查是否需要立即清理
-        let currentSize = getStorageSize()
-        if currentSize > limit {
-            let targetDays = max(7, Int(Double(limit) / Double(currentSize) * 30))
-            cleanupOldData(keepRecentDays: targetDays)
-        }
     }
 } 

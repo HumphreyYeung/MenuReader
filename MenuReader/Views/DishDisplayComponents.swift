@@ -249,9 +249,9 @@ struct UnifiedDishCard: View {
             // 标签（素食、辣度等）
             tagsSection
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 8)  // 增加底部间距避免重叠
+        .padding(.horizontal, AppSpacing.screenMargin)
+        .padding(.top, AppSpacing.xs)
+        .padding(.bottom, AppSpacing.xs)  // 增加底部间距避免重叠
         .contentShape(Rectangle())
         .onTapGesture {
             onTapCard?()

@@ -14,6 +14,7 @@ struct PhotoPreviewView: View {
     // 分析服务
     @StateObject private var menuAnalysisService = MenuAnalysisService.shared
     @StateObject private var offlineManager = OfflineManager.shared
+    @EnvironmentObject var cartManager: CartManager
     
     // 分析状态管理
     @State private var isAnalyzing = false
@@ -128,14 +129,25 @@ struct PhotoPreviewView: View {
         .statusBarHidden(true)
         .fullScreenCover(isPresented: $showAnalysisResult) {
             if let result = analysisResult {
-                CategorizedMenuView(
-                    analysisResult: result,
-                    dishImages: dishImages,
-                    onDismiss: {
-                        showAnalysisResult = false
-                        onRetake()
+                NavigationStack {
+                    CategorizedMenuView(
+                        analysisResult: result,
+                        dishImages: dishImages,
+                        onDismiss: {
+                            showAnalysisResult = false
+                            onRetake()
+                        }
+                    )
+                    .navigationDestination(for: String.self) { destination in
+                        switch destination {
+                        case "cart":
+                            CartView(cartItems: $cartManager.cartItems)
+                        default:
+                            EmptyView()
+                        }
                     }
-                )
+                }
+                .environmentObject(cartManager)
             }
         }
     }
@@ -157,6 +169,9 @@ struct PhotoPreviewView: View {
             print("📞 调用 menuAnalysisService.analyzeMenuWithDishImages...")
             let (result, images) = try await menuAnalysisService.analyzeMenuWithDishImages(image)
             
+            // 为历史记录创建缩略图
+            let thumbnailData = image.jpegData(compressionQuality: 0.2)
+            
             await MainActor.run {
                 print("✅ 分析完成！识别到 \(result.items.count) 个菜品")
                 print("🖼️ 获取到 \(images.count) 组菜品图片")
@@ -166,7 +181,14 @@ struct PhotoPreviewView: View {
                 isAnalyzing = false
                 
                 // 保存到历史记录
-                saveMenuToHistory(result: result, originalImage: image)
+                let historyEntry = MenuProcessResult(
+                    id: UUID(),
+                    scanDate: Date(),
+                    thumbnailData: thumbnailData,
+                    items: result.items,
+                    dishImages: self.dishImages
+                )
+                StorageService.shared.saveMenuHistory(historyEntry)
                 
                 // 显示结果页面
                 showAnalysisResult = true
@@ -202,15 +224,6 @@ struct PhotoPreviewView: View {
         } else {
             return "分析过程遇到问题，请重试。如果问题持续存在，请联系客服"
         }
-    }
-    
-    private func saveMenuToHistory(result: MenuAnalysisResult, originalImage: UIImage) {
-        print("💾 PhotoPreviewView: 开始保存菜单到历史记录...")
-        
-        let processResult = MenuProcessResult(items: result.items)
-        offlineManager.saveMenuResult(processResult, originalImage: originalImage)
-        
-        print("✅ 菜单已保存到历史记录，包含 \(result.items.count) 个菜品")
     }
 }
 

@@ -12,21 +12,13 @@ struct HistoryView: View {
     @StateObject private var offlineManager = OfflineManager.shared
     @State private var historyItems: [MenuProcessResult] = []
     @State private var searchText = ""
-    @State private var showingFavoritesOnly = false
-    @State private var currentPage = 0
-    @State private var isLoading = false
-    @State private var showingStorageSettings = false
     @Environment(\.dismiss) private var dismiss
     
-    private let pageSize = 20
-    
     var filteredItems: [MenuProcessResult] {
-        let items = showingFavoritesOnly ? historyItems.filter { $0.isFavorite } : historyItems
-        
         if searchText.isEmpty {
-            return items
+            return historyItems
         } else {
-            return items.filter { result in
+            return historyItems.filter { result in
                 result.items.contains { item in
                     item.originalName.localizedCaseInsensitiveContains(searchText) ||
                     (item.translatedName?.localizedCaseInsensitiveContains(searchText) ?? false)
@@ -41,29 +33,24 @@ struct HistoryView: View {
             // Search bar and filter
             VStack {
                 HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
+                    Image(systemName: AppIcons.search)
+                        .foregroundColor(AppColors.secondaryText)
                     TextField("搜索菜品...", text: $searchText)
+                        .foregroundColor(AppColors.primary)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-                .padding(.horizontal)
-                
-                HStack {
-                    Toggle("只显示收藏", isOn: $showingFavoritesOnly)
-                        .toggleStyle(SwitchToggleStyle())
-                    Spacer()
-                    Text("共 \(filteredItems.count) 条记录")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.horizontal, AppSpacing.m)
+                .padding(.vertical, AppSpacing.s)
+                .background(AppColors.contentBackground)
+                .cornerRadius(AppSpacing.standardCorner)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.standardCorner)
+                        .stroke(AppColors.separator, lineWidth: 1)
+                )
+                .padding(.horizontal, AppSpacing.screenMargin)
             }
-            .background(Color(.systemBackground))
-            .shadow(color: .gray.opacity(0.1), radius: 1)
+            .padding(.vertical, AppSpacing.m)
+            .background(AppColors.background)
+            .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
             
             // History list
             if filteredItems.isEmpty {
@@ -71,46 +58,48 @@ struct HistoryView: View {
             } else {
                 List {
                     ForEach(filteredItems) { item in
-                        HistoryItemRow(
-                            item: item,
-                            onToggleFavorite: { toggleFavorite(item.id) },
-                            onDelete: { deleteItem(item.id) }
-                        )
-                        .listRowInsets(EdgeInsets())
+                        NavigationLink(value: item) {
+                            HistoryItemRow(item: item)
+                        }
+                        .listRowBackground(AppColors.background)
+                        .listRowInsets(EdgeInsets(
+                            top: 0,
+                            leading: AppSpacing.screenMargin,
+                            bottom: 0,
+                            trailing: AppSpacing.screenMargin
+                        ))
+                        .listRowSeparatorTint(AppColors.separator)
                     }
+                    .onDelete(perform: deleteItems)
                 }
-                .listStyle(PlainListStyle())
+                .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .background(Color(.systemGroupedBackground))
+                .background(AppColors.background)
             }
         }
-        .navigationTitle("扫描历史")
+        .navigationDestination(for: MenuProcessResult.self) { result in
+            CategorizedMenuView(
+                analysisResult: MenuAnalysisResult(items: result.items),
+                dishImages: result.dishImages ?? [:]
+                // 不传递 onDismiss，让它使用 .push 导航模式
+            )
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button(action: { showingStorageSettings = true }) {
-                        Label("存储管理", systemImage: "externaldrive.badge.questionmark")
-                    }
-                    
-                    if offlineManager.pendingUploadsCount > 0 {
-                        Button(action: { offlineManager.processQueue() }) {
-                            Label("同步待上传数据 (\(offlineManager.pendingUploadsCount))", 
-                                  systemImage: "arrow.up.circle")
-                        }
-                        .disabled(offlineManager.isOfflineMode || offlineManager.isProcessingQueue)
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+            ToolbarItem(placement: .principal) {
+                HStack {
+                    Text("扫描历史")
+                        .font(AppFonts.navigationTitle)
+                        .foregroundColor(AppColors.primary)
+                    Text("(\(filteredItems.count))")
+                        .font(AppFonts.navigationTitle)
+                        .foregroundColor(AppColors.secondaryText)
                 }
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(AppColors.background)
         .onAppear {
             loadHistory()
-        }
-        .sheet(isPresented: $showingStorageSettings) {
-            StorageManagementView()
         }
     }
     
@@ -118,37 +107,37 @@ struct HistoryView: View {
         VStack {
             Spacer()
             
-            Image(systemName: searchText.isEmpty && !showingFavoritesOnly ? "clock.circle" : "magnifyingglass.circle")
+            Image(systemName: searchText.isEmpty ? "clock.circle" : "magnifyingglass.circle")
                 .font(.system(size: 60))
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.tertiaryText)
             
-            Text(searchText.isEmpty && !showingFavoritesOnly ? "暂无扫描历史" : "未找到相关记录")
-                .font(.title2)
+            Text(searchText.isEmpty ? "暂无扫描历史" : "未找到相关记录")
+                .font(AppFonts.title1)
                 .fontWeight(.medium)
                 .padding(.top)
             
-            if searchText.isEmpty && !showingFavoritesOnly {
+            if searchText.isEmpty {
                 Text("扫描菜单后会显示在这里")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(AppFonts.body)
+                    .foregroundColor(AppColors.secondaryText)
                     .padding(.top, 4)
             }
             
             Spacer()
         }
+        .background(AppColors.background)
     }
     
     private func loadHistory() {
         historyItems = storageService.loadMenuHistory()
     }
     
-    private func toggleFavorite(_ id: UUID) {
-        storageService.toggleFavoriteHistoryItem(withId: id)
-        loadHistory()
-    }
-    
-    private func deleteItem(_ id: UUID) {
-        storageService.deleteMenuHistoryItem(withId: id)
+    private func deleteItems(at offsets: IndexSet) {
+        let itemsToDelete = offsets.map { filteredItems[$0] }
+        for item in itemsToDelete {
+            storageService.deleteMenuHistoryItem(withId: item.id)
+        }
+        // Reload data from storage to reflect the change
         loadHistory()
     }
 }
@@ -156,8 +145,6 @@ struct HistoryView: View {
 // MARK: - History Item Row
 struct HistoryItemRow: View {
     let item: MenuProcessResult
-    let onToggleFavorite: () -> Void
-    let onDelete: () -> Void
     
     private var formattedDate: String {
         let formatter = DateFormatter()
@@ -183,52 +170,33 @@ struct HistoryItemRow: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 60, height: 60)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.smallCorner))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: AppSpacing.smallCorner)
+                        .stroke(AppColors.separator, lineWidth: 1)
                 )
             
             // Content
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                 Text(formattedDate)
-                    .font(.subheadline)
+                    .font(AppFonts.subheadline)
                     .fontWeight(.medium)
+                    .foregroundColor(AppColors.primary)
                 
                 Text("\(item.items.count) 个菜品")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.secondaryText)
                 
                 if let firstItem = item.items.first {
                     Text(firstItem.translatedName ?? firstItem.originalName)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.secondaryText)
                         .lineLimit(1)
                 }
             }
             
             Spacer()
-            
-            // Actions
-            VStack {
-                Button(action: onToggleFavorite) {
-                    Image(systemName: item.isFavorite ? "heart.fill" : "heart")
-                        .foregroundColor(item.isFavorite ? .red : .gray)
-                        .font(.title3)
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
-                        .font(.title3)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .gray.opacity(0.1), radius: 2, y: 1)
+        .padding(.vertical, AppSpacing.s)
     }
 }

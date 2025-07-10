@@ -57,9 +57,9 @@ class OfflineManager: ObservableObject {
     // MARK: - Public Methods
     
     /// 保存菜单结果（根据网络状态决定是否加入队列）
-    func saveMenuResult(_ result: MenuProcessResult, originalImage: UIImage?) {
-        // 总是保存到本地历史
-        storageService.saveMenuHistory(result, originalImage: originalImage)
+    func saveMenuResult(_ result: MenuProcessResult) {
+        print("💾 [OfflineManager] 正在离线保存菜单结果...")
+        storageService.saveMenuHistory(result)
         
         // 如果离线，添加到待上传队列
         if isOfflineMode {

@@ -19,19 +19,24 @@ struct ProfileView: View {
             Section(header: Text("语言设置")) {
                 languageSettingsView
             }
+            .listRowBackground(AppColors.contentBackground)
             
             // MARK: - Allergen Management Section
             Section(header: Text("过敏原管理")) {
                 allergenManagementView
             }
+            .listRowBackground(AppColors.contentBackground)
             
             // MARK: - App Information Section
             Section(header: Text("应用信息")) {
                 appInfoView
             }
+            .listRowBackground(AppColors.contentBackground)
         }
         .navigationTitle("个人设置")
         .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        .background(AppColors.background)
         .alert("添加自定义过敏原", isPresented: $showingAddCustomAllergen) {
             TextField("输入过敏原名称", text: $viewModel.customAllergenInput)
             Button("添加") {
@@ -52,6 +57,7 @@ struct ProfileView: View {
     private var languageSettingsView: some View {
         HStack {
             Label("目标语言", systemImage: "globe")
+                .foregroundColor(AppColors.primary)
             Spacer()
             Picker("目标语言", selection: $viewModel.userProfile.targetLanguage) {
                 ForEach(SupportedLanguage.allCases, id: \.rawValue) { language in
@@ -59,6 +65,7 @@ struct ProfileView: View {
                 }
             }
             .pickerStyle(MenuPickerStyle())
+            .tint(AppColors.accent)
         }
     }
     
@@ -73,8 +80,9 @@ struct ProfileView: View {
                     }) {
                         HStack {
                             Image(systemName: viewModel.hasAllergen(allergen.rawValue) ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(viewModel.hasAllergen(allergen.rawValue) ? .blue : .secondary)
+                                .foregroundColor(viewModel.hasAllergen(allergen.rawValue) ? AppColors.accent : AppColors.secondaryText)
                             Text(allergen.displayName)
+                                .foregroundColor(AppColors.primary)
                             Spacer()
                         }
                     }
@@ -96,14 +104,15 @@ struct ProfileView: View {
                 ForEach(viewModel.customAllergens, id: \.self) { allergen in
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppColors.accent)
                         Text(allergen)
+                            .foregroundColor(AppColors.primary)
                         Spacer()
                         Button(action: {
                             viewModel.removeCustomAllergen(allergen)
                         }) {
                             Image(systemName: "minus.circle.fill")
-                                .foregroundColor(.red)
+                                .foregroundColor(AppColors.error)
                         }
                     }
                     .padding(.vertical, 2)
@@ -119,9 +128,9 @@ struct ProfileView: View {
             }) {
                 HStack {
                     Image(systemName: "plus.circle")
-                        .foregroundColor(.blue)
+                        .foregroundColor(AppColors.accent)
                     Text("添加自定义过敏原")
-                        .foregroundColor(.blue)
+                        .foregroundColor(AppColors.accent)
                     Spacer()
                 }
             }
@@ -133,9 +142,10 @@ struct ProfileView: View {
     private var appInfoView: some View {
         HStack {
             Label("版本", systemImage: "info.circle")
+                .foregroundColor(AppColors.primary)
             Spacer()
             Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.secondaryText)
         }
     }
 }
