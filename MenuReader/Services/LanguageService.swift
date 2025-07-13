@@ -48,6 +48,8 @@ class LanguageService {
             return "it"
         case "es":
             return "es"
+        case "pt":
+            return "pt"
         default:
             return detected
         }
@@ -98,6 +100,8 @@ class LanguageService {
             return "it"
         case "es", "spanish":
             return "es"
+        case "pt", "portuguese":
+            return "pt"
         default:
             return lowercased
         }

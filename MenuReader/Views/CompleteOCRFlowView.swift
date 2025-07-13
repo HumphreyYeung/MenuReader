@@ -594,10 +594,14 @@ struct SimpleCategorySection: View {
                 LazyVStack(spacing: 12) {
                     ForEach(items, id: \.id) { item in
                         let itemImages = dishImages[item.originalName] ?? []
-                        UnifiedDishCard(
-                            menuItem: item, 
-                            dishImages: itemImages
-                        )
+                        NavigationLink(destination: MenuItemDetailView(menuItem: item, dishImages: itemImages)) {
+                            UnifiedDishCard(
+                                menuItem: item, 
+                                dishImages: itemImages,
+                                onTapCard: nil  // 卡片点击由NavigationLink处理
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(.top, 12)

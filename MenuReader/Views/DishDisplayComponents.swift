@@ -199,10 +199,6 @@ struct UnifiedDishCard: View {
                 )
             )
         )
-        .contentShape(Rectangle())  // 限制点击区域仅限于图片区域
-        .onTapGesture {
-            // 图片区域点击不触发卡片点击事件，保留给图片切换
-        }
     }
     
     // MARK: - 菜品信息区域
@@ -252,10 +248,6 @@ struct UnifiedDishCard: View {
         .padding(.horizontal, AppSpacing.screenMargin)
         .padding(.top, AppSpacing.xs)
         .padding(.bottom, AppSpacing.xs)  // 增加底部间距避免重叠
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTapCard?()
-        }
     }
     
     // MARK: - 添加到购物车按钮

@@ -360,23 +360,24 @@ struct CategorySectionView: View {
         // 直接显示菜品卡片列表，不显示分类标题
         LazyVStack(spacing: AppSpacing.m) {  // 统一卡片间距
             ForEach(items) { item in
-                UnifiedDishCard(
-                    menuItem: item,
-                    dishImages: dishImages[item.originalName] ?? [],
-                    showCartButton: true,
-                    cartItems: $cartItems,
-                    isAnimating: animatingItems[item.originalName] ?? false,
-                    onAddToCart: {
-                        onAddToCart(item)
-                    },
-                    onRemoveFromCart: {
-                        removeFromCart(item)
-                    },
-                    onTapCard: {
-                        // 可以添加卡片点击处理逻辑
-                    }
-                )
-                .frame(maxWidth: .infinity)  // 确保卡片宽度一致
+                NavigationLink(destination: MenuItemDetailView(menuItem: item, dishImages: dishImages[item.originalName] ?? [])) {
+                    UnifiedDishCard(
+                        menuItem: item,
+                        dishImages: dishImages[item.originalName] ?? [],
+                        showCartButton: true,
+                        cartItems: $cartItems,
+                        isAnimating: animatingItems[item.originalName] ?? false,
+                        onAddToCart: {
+                            onAddToCart(item)
+                        },
+                        onRemoveFromCart: {
+                            removeFromCart(item)
+                        },
+                        onTapCard: nil  // 卡片点击由NavigationLink处理
+                    )
+                    .frame(maxWidth: .infinity)  // 确保卡片宽度一致
+                }
+                .buttonStyle(PlainButtonStyle())  // 防止NavigationLink干扰卡片内的按钮
             }
         }
     }

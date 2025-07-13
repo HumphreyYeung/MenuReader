@@ -469,6 +469,7 @@ class GeminiService: ObservableObject, @unchecked Sendable {
         case "de": return "德文"
         case "it": return "意大利文"
         case "es": return "西班牙文"
+        case "pt": return "葡萄牙文"
         default: return "未知语言"
         }
     }

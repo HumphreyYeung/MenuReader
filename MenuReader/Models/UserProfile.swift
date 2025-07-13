@@ -31,6 +31,7 @@ struct UserProfile: Codable {
         case "de": return SupportedLanguage.german.rawValue
         case "it": return SupportedLanguage.italian.rawValue
         case "es": return SupportedLanguage.spanish.rawValue
+        case "pt": return SupportedLanguage.portuguese.rawValue
         default: return SupportedLanguage.english.rawValue
         }
     }
@@ -39,24 +40,26 @@ struct UserProfile: Codable {
 // MARK: - Supported Languages
 enum SupportedLanguage: String, CaseIterable {
     case english = "en"
-    case chinese = "zh"
-    case japanese = "ja"
-    case korean = "ko"
-    case french = "fr"
-    case german = "de"
-    case italian = "it"
     case spanish = "es"
+    case french = "fr"
+    case italian = "it"
+    case japanese = "ja"
+    case german = "de"
+    case portuguese = "pt"
+    case chinese = "zh"
+    case korean = "ko"
     
     var displayName: String {
         switch self {
         case .english: return "English"
-        case .chinese: return "中文"
-        case .japanese: return "日本語"
-        case .korean: return "한국어"
-        case .french: return "Français"
-        case .german: return "Deutsch"
-        case .italian: return "Italiano"
         case .spanish: return "Español"
+        case .french: return "Français"
+        case .italian: return "Italiano"
+        case .japanese: return "日本語"
+        case .german: return "Deutsch"
+        case .portuguese: return "Português"
+        case .chinese: return "中文"
+        case .korean: return "한국어"
         }
     }
     
@@ -64,13 +67,14 @@ enum SupportedLanguage: String, CaseIterable {
     var isoCode: String {
         switch self {
         case .english: return "en"
-        case .chinese: return "zh"
-        case .japanese: return "ja"
-        case .korean: return "ko"
-        case .french: return "fr"
-        case .german: return "de"
-        case .italian: return "it"
         case .spanish: return "es"
+        case .french: return "fr"
+        case .italian: return "it"
+        case .japanese: return "ja"
+        case .german: return "de"
+        case .portuguese: return "pt"
+        case .chinese: return "zh"
+        case .korean: return "ko"
         }
     }
 }
@@ -79,25 +83,27 @@ enum SupportedLanguage: String, CaseIterable {
 enum CommonAllergen: String, CaseIterable {
     case peanuts = "peanuts"
     case treeNuts = "tree_nuts"
-    case milk = "milk"
     case eggs = "eggs"
+    case milk = "milk"
     case wheat = "wheat"
     case soy = "soy"
     case fish = "fish"
     case shellfish = "shellfish"
     case sesame = "sesame"
+    case pork = "pork"
     
     var displayName: String {
         switch self {
-        case .peanuts: return "花生"
-        case .treeNuts: return "坚果"
-        case .milk: return "牛奶"
-        case .eggs: return "鸡蛋"
-        case .wheat: return "小麦"
-        case .soy: return "大豆"
-        case .fish: return "鱼类"
-        case .shellfish: return "贝类"
-        case .sesame: return "芝麻"
+        case .peanuts: return "Peanut"
+        case .treeNuts: return "Tree nuts"
+        case .eggs: return "Egg"
+        case .milk: return "Dairy"
+        case .wheat: return "Gluten"
+        case .soy: return "Soybean"
+        case .fish: return "Fish"
+        case .shellfish: return "Shellfish"
+        case .sesame: return "Sesame"
+        case .pork: return "Pork"
         }
     }
 }
@@ -157,6 +163,10 @@ class ProfileViewModel: ObservableObject {
     }
     
     func removeCustomAllergen(_ allergen: String) {
+        removeAllergen(allergen)
+    }
+    
+    func removeAllergen(_ allergen: String) {
         userProfile.allergens.removeAll { $0 == allergen }
         customAllergens.removeAll { $0 == allergen }
         saveProfile()
@@ -166,5 +176,10 @@ class ProfileViewModel: ObservableObject {
         if let data = try? JSONEncoder().encode(userProfile) {
             UserDefaults.standard.set(data, forKey: "UserProfile")
         }
+    }
+    
+    func updateTargetLanguage(_ language: String) {
+        userProfile.targetLanguage = language
+        saveProfile()
     }
 }

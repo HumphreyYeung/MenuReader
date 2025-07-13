@@ -179,37 +179,40 @@ struct OCRProcessingResult: Sendable {
 /// 支持的OCR语言
 enum SupportedOCRLanguage: String, Codable, CaseIterable, Sendable {
     case english = "en"
-    case chinese = "zh"
-    case japanese = "ja"
-    case korean = "ko"
-    case french = "fr"
     case spanish = "es"
-    case german = "de"
+    case french = "fr"
     case italian = "it"
+    case japanese = "ja"
+    case german = "de"
+    case portuguese = "pt"
+    case chinese = "zh"
+    case korean = "ko"
     
     var displayName: String {
         switch self {
         case .english: return "English"
-        case .chinese: return "中文"
-        case .japanese: return "日本語"
-        case .korean: return "한국어"
-        case .french: return "Français"
         case .spanish: return "Español"
-        case .german: return "Deutsch"
+        case .french: return "Français"
         case .italian: return "Italiano"
+        case .japanese: return "日本語"
+        case .german: return "Deutsch"
+        case .portuguese: return "Português"
+        case .chinese: return "中文"
+        case .korean: return "한국어"
         }
     }
     
     var flag: String {
         switch self {
         case .english: return "🇺🇸"
-        case .chinese: return "🇨🇳"
-        case .japanese: return "🇯🇵"
-        case .korean: return "🇰🇷"
-        case .french: return "🇫🇷"
         case .spanish: return "🇪🇸"
-        case .german: return "🇩🇪"
+        case .french: return "🇫🇷"
         case .italian: return "🇮🇹"
+        case .japanese: return "🇯🇵"
+        case .german: return "🇩🇪"
+        case .portuguese: return "🇵🇹"
+        case .chinese: return "🇨🇳"
+        case .korean: return "🇰🇷"
         }
     }
 }
